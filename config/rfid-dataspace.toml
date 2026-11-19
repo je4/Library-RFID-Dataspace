@@ -1,5 +1,5 @@
-addr = "localhost:5000"
-extaddr = "http://localhost:5000"
+addr = "localhost:5001"
+extaddr = "http://localhost:5001"
 name = "rfid-dataspace-01"
 #wsbroker = "https://ws.k8s.ub.unibas.ch"
 wsbroker = "websocket-broker.k8s-tls.ub.unibas.ch"
@@ -9,8 +9,8 @@ default_afi = "07"
 max_tags = 100
 
 [themes]
-#dark = "mediathek-dark"
-#light = "mediathek-light"
+dark = "mediathek-dark"
+light = "mediathek-light"
 
 [clienttls]
 type = "minivault"

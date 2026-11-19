@@ -3,46 +3,13 @@
     <div class="flex items-center space-x-3.5 flex-1 min-w-0">
         <!-- Dynamisches Icon & Gradient -->
         <div class="w-11 h-11 rounded-xl bg-primary text-primary-content flex items-center justify-center shadow-lg shadow-primary/25 shrink-0">
-            <img src="{{.StaticPath}}/img/icons/{{if .IsLoan}}book-open.svg{{else if .IsEncode}}tag.svg{{else if .IsInventory}}archive.svg{{else}}bolt.svg{{end}}" class="w-6 h-6 brightness-0 invert" alt="{{if .IsLoan}}{{tr "navigation.loan"}}{{else if .IsEncode}}{{tr "navigation.encode"}}{{else if .IsInventory}}{{tr "navigation.inventory"}}{{else}}{{tr "navigation.appTitle"}}{{end}}" />
+            <img src="{{.StaticPath}}/img/icons/bolt.svg" class="w-6 h-6 brightness-0 invert" alt="{{tr "navigation.appTitle"}}" />
         </div>
 
         <div class="min-w-0 flex-1">
-            <!-- Breadcrumbs Navigation -->
-            {{if .Channel}}
-            <nav class="breadcrumbs text-xs text-base-content/70 py-0 mb-0.5" aria-label="{{tr "navigation.breadcrumb"}}">
-                <ul>
-                    <li>
-                        <a href="../" id="nav-channels-btn" class="inline-flex items-center gap-1 hover:text-primary transition-colors font-medium" title="{{tr "navigation.channelHint"}}">
-                            <span class="app-icon icon-channel w-3 h-3 shrink-0" aria-hidden="true"></span>
-                            <span>{{tr "channel.plural"}}</span>
-                        </a>
-                    </li>
-                    <li>
-                        {{if or .IsLoan .IsEncode .IsInventory}}
-                        <a href="./" id="nav-channel-btn" class="inline-flex items-center gap-1 hover:text-primary transition-colors font-medium" title="Zum Channel {{.Channel}} (Desk)">
-                            <span class="app-icon icon-channel w-3 h-3 shrink-0" aria-hidden="true"></span>
-                            <span>{{.Channel}}</span>
-                        </a>
-                        {{else}}
-                        <span class="inline-flex items-center gap-1 font-medium text-base-content/80">
-                            <span class="app-icon icon-channel w-3 h-3 shrink-0" aria-hidden="true"></span>
-                            <span>{{.Channel}}</span>
-                        </span>
-                        {{end}}
-                    </li>
-                    <li class="font-semibold text-base-content">
-                        <span class="inline-flex items-center gap-1">
-                            <span class="app-icon {{if .IsLoan}}icon-book-open{{else if .IsEncode}}icon-tag{{else if .IsInventory}}icon-archive{{else}}icon-home{{end}} w-3 h-3 shrink-0" aria-hidden="true"></span>
-                            <span>{{if .IsLoan}}{{tr "navigation.loanReturn"}}{{else if .IsEncode}}{{tr "navigation.encode"}}{{else if .IsInventory}}{{tr "navigation.inventory"}}{{else}}{{tr "navigation.desk"}}{{end}}</span>
-                        </span>
-                    </li>
-                </ul>
-            </nav>
-            {{end}}
-
             <!-- Titel & Status Badge -->
             <h1 class="text-xl font-bold tracking-tight flex items-center gap-2.5">
-                {{if .IsLoan}}{{tr "navigation.loanReturn"}}{{else if .IsEncode}}{{tr "navigation.encode"}}{{else if .IsInventory}}{{tr "navigation.inventory"}}{{else}}{{tr "navigation.appTitle"}}{{end}}
+                {{tr "navigation.appTitle"}}
                 {{if .Channel}}
                 <span id="field-status-badge" class="badge badge-sm badge-outline transition-all">{{tr "common.ready"}}</span>
                 {{else}}

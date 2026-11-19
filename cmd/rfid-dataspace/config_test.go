@@ -25,8 +25,8 @@ func TestLoadConfig_Default(t *testing.T) {
 	if conf.Name != "rfid-dataspace-01" {
 		t.Errorf("expected client name 'rfid-dataspace-01', got '%s'", conf.Name)
 	}
-	if conf.Addr != "localhost:5000" {
-		t.Errorf("expected addr 'localhost:5000', got '%s'", conf.Addr)
+	if conf.Addr != "localhost:5001" {
+		t.Errorf("expected addr 'localhost:5001', got '%s'", conf.Addr)
 	}
 	if conf.DefaultISIL != "CH-001596-0" {
 		t.Errorf("expected default_isil 'CH-001596-0', got '%s'", conf.DefaultISIL)
