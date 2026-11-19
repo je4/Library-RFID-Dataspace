@@ -19,3 +19,5 @@ package-lock.json
 .junie/
 .env
 certs/
+/go.work
+/go.work.sum

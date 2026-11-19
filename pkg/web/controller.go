@@ -11,6 +11,7 @@ import (
 	"emperror.dev/errors"
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
+	"github.com/je4/Library-RFID-Apps/pkg/catalog"
 	"github.com/je4/Library-RFID-Apps/pkg/desk"
 	"github.com/je4/Library-RFID-Apps/pkg/libraryclient"
 	"github.com/je4/Library-RFID-Dataspace/data"
@@ -19,19 +20,21 @@ import (
 
 // Config defines settings for the rfid-dataspace web server.
 type Config struct {
-	Addr        string
-	ExtAddr     string
-	ClientName  string
-	WSBroker    string
-	Channels    []string
-	DefaultISIL string
-	DefaultAFI  string
-	ThemeLight  string
-	ThemeDark   string
-	Hub         *desk.Hub
-	RFIDClient  libraryclient.Client
-	ISILList    map[string]*desk.ISILEntry
-	Logger      zLogger.ZLogger
+	CatalogSearch func(context.Context, string) ([]catalog.Book, error)
+	SourceRecords []SourceRecordMapping
+	Addr          string
+	ExtAddr       string
+	ClientName    string
+	WSBroker      string
+	Channels      []string
+	DefaultISIL   string
+	DefaultAFI    string
+	ThemeLight    string
+	ThemeDark     string
+	Hub           *desk.Hub
+	RFIDClient    libraryclient.Client
+	ISILList      map[string]*desk.ISILEntry
+	Logger        zLogger.ZLogger
 }
 
 // Controller manages HTTP routes, SSE streaming, and embedded frontend rendering.
@@ -43,6 +46,7 @@ type Controller struct {
 	logger            zLogger.ZLogger
 	hub               *desk.Hub
 	rfidClient        libraryclient.Client
+	catalogService    *catalogService
 }
 
 // NewController creates and initializes the Web Controller instance.
@@ -65,6 +69,10 @@ func NewController(cfg Config) (*Controller, error) {
 		logger:     cfg.Logger,
 		hub:        cfg.Hub,
 		rfidClient: cfg.RFIDClient,
+	}
+
+	if cfg.CatalogSearch != nil {
+		ctrl.catalogService = newCatalogService(cfg.CatalogSearch)
 	}
 
 	// Compile templates for all supported languages
@@ -97,6 +105,7 @@ func NewController(cfg Config) (*Controller, error) {
 	router.GET("/", ctrl.HandleLoan)
 	router.GET("/loan", ctrl.HandleLoan)
 	router.GET("/dataspace", ctrl.HandleLoan)
+	router.GET("/catalog", ctrl.handleCatalog)
 	router.GET("/events", ctrl.HandleEventsStream)
 	router.POST("/loan/afi/:action", ctrl.HandleAFIAction)
 	router.POST("/dataspace/afi/:action", ctrl.HandleAFIAction)
@@ -104,10 +113,19 @@ func NewController(cfg Config) (*Controller, error) {
 	// Channel-scoped routes
 	channelGroup := router.Group("/:channel")
 	{
+		channelGroup.Use(func(c *gin.Context) {
+			ch := c.Param("channel")
+			if ch != "" && !ctrl.isValidChannel(ch) {
+				c.AbortWithStatus(http.StatusNotFound)
+				return
+			}
+			c.Next()
+		})
 		channelGroup.GET("", ctrl.HandleChannelRoot)
 		channelGroup.GET("/", ctrl.HandleChannelRoot)
 		channelGroup.GET("/loan", ctrl.HandleLoan)
 		channelGroup.GET("/dataspace", ctrl.HandleLoan)
+		channelGroup.GET("/catalog", ctrl.handleCatalog)
 		channelGroup.GET("/events", ctrl.HandleEventsStream)
 		channelGroup.POST("/loan/afi/:action", ctrl.HandleAFIAction)
 		channelGroup.POST("/dataspace/afi/:action", ctrl.HandleAFIAction)
@@ -206,4 +224,16 @@ func (ctrl *Controller) HandleWriteAFIResponse(resp *libraryclient.WriteAFIRespo
 	}
 
 	ctrl.BroadcastLoanTags(channel, successMsg, errorMsg)
+}
+
+func (ctrl *Controller) isValidChannel(ch string) bool {
+	if len(ctrl.cfg.Channels) == 0 {
+		return true
+	}
+	for _, c := range ctrl.cfg.Channels {
+		if c == ch {
+			return true
+		}
+	}
+	return false
 }

@@ -7,7 +7,7 @@ const ERROR_TTL = 30 * 1000;
 let unavailableUntil = 0;
 
 function catalogURL(barcode) {
-    let path = window.location.pathname.replace(/\/(?:loan|encode|inventory)\/?$/, '/');
+    let path = window.location.pathname.replace(/\/(?:loan|encode|inventory|dataspace)\/?$/, '/');
     if (!path.endsWith('/')) path += '/';
     const url = new URL(path + 'catalog', window.location.origin);
     url.searchParams.set('barcode', barcode);

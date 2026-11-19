@@ -11,6 +11,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/je4/Library-RFID-Apps/pkg/catalog"
 	"github.com/je4/Library-RFID-Apps/pkg/desk"
 	"github.com/je4/Library-RFID-Apps/pkg/libraryclient"
 	"github.com/je4/Library-RFID-Dataspace/pkg/web"
@@ -34,6 +35,17 @@ func main() {
 	output := zerolog.ConsoleWriter{Out: os.Stdout, TimeFormat: time.RFC3339}
 	loggerZero := zerolog.New(output).With().Timestamp().Str("app", "rfid-dataspace").Logger()
 	var logger zLogger.ZLogger = &loggerZero
+
+	elasticClient, err := newElasticClient(conf.ElasticSearch)
+	if err != nil {
+		logger.Fatal().Err(err).Msg("cannot initialize Elasticsearch client")
+	}
+	var catalogSearch func(context.Context, string) ([]catalog.Book, error)
+	if elasticClient != nil {
+		catalogSearch = func(ctx context.Context, barcode string) ([]catalog.Book, error) {
+			return catalog.SearchByBarcode(ctx, elasticClient, conf.ElasticSearch.Index, barcode)
+		}
+	}
 
 	addr := conf.Addr
 	if addr == "" {
@@ -62,18 +74,20 @@ func main() {
 
 	// 4. Initialize Web Controller with embedded templates and assets
 	webCtrl, err := web.NewController(web.Config{
-		Addr:        addr,
-		ExtAddr:     extAddr,
-		ClientName:  conf.Name,
-		WSBroker:    conf.WSBroker,
-		Channels:    conf.Channels,
-		DefaultISIL: conf.DefaultISIL,
-		DefaultAFI:  conf.DefaultAFI,
-		ThemeLight:  conf.Themes.Light,
-		ThemeDark:   conf.Themes.Dark,
-		Hub:         hub,
-		ISILList:    isilList,
-		Logger:      logger,
+		CatalogSearch: catalogSearch,
+		SourceRecords: conf.SourceRecords,
+		Addr:          addr,
+		ExtAddr:       extAddr,
+		ClientName:    conf.Name,
+		WSBroker:      conf.WSBroker,
+		Channels:      conf.Channels,
+		DefaultISIL:   conf.DefaultISIL,
+		DefaultAFI:    conf.DefaultAFI,
+		ThemeLight:    conf.Themes.Light,
+		ThemeDark:     conf.Themes.Dark,
+		Hub:           hub,
+		ISILList:      isilList,
+		Logger:        logger,
 	})
 	if err != nil {
 		logger.Fatal().Err(err).Msg("cannot initialize web controller")

@@ -4,6 +4,8 @@ import (
 	"emperror.dev/errors"
 	"github.com/BurntSushi/toml"
 	"github.com/je4/Library-RFID-Dataspace/config"
+	"github.com/je4/Library-RFID-Dataspace/pkg/web"
+	utilsconfig "github.com/je4/utils/v2/pkg/config"
 	"go.ub.unibas.ch/cloud/certloader/v2/pkg/loader"
 )
 
@@ -11,6 +13,12 @@ import (
 type ThemeConfig struct {
 	Dark  string `toml:"dark"`
 	Light string `toml:"light"`
+}
+
+type ElasticSearchConfig struct {
+	Endpoint []string              `toml:"endpoint"`
+	Index    string                `toml:"index"`
+	APIKey   utilsconfig.EnvString `toml:"apikey"`
 }
 
 // DataspaceAppConfig defines configuration parameters for the rfid-dataspace application.
@@ -26,21 +34,25 @@ type ThemeConfig struct {
 //   - MaxTags: Maximum number of scanned tags to retain in memory (default: 100).
 //   - ReadLimit: Maximum WebSocket message read limit in bytes (optional).
 //   - Themes: Explicit light and dark themes (optional).
+//   - ElasticSearch: Configuration for Elasticsearch catalog lookups.
+//   - SourceRecords: Swisscovery source record mappings.
 //   - ClientTLS: mTLS configuration via certloader (MiniVault, File, Env, Dev, or ACME).
 //   - WebTLS: TLS configuration for the local web server.
 type DataspaceAppConfig struct {
-	Addr        string        `toml:"addr"`
-	ExtAddr     string        `toml:"extaddr"`
-	Name        string        `toml:"name"`
-	WSBroker    string        `toml:"wsbroker"`
-	Channels    []string      `toml:"channels"`
-	DefaultISIL string        `toml:"default_isil"`
-	DefaultAFI  string        `toml:"default_afi"`
-	MaxTags     int           `toml:"max_tags"`
-	ReadLimit   int64         `toml:"read_limit"`
-	Themes      ThemeConfig   `toml:"themes"`
-	ClientTLS   loader.Config `toml:"clienttls"`
-	WebTLS      loader.Config `toml:"webtls"`
+	Addr          string                    `toml:"addr"`
+	ExtAddr       string                    `toml:"extaddr"`
+	Name          string                    `toml:"name"`
+	WSBroker      string                    `toml:"wsbroker"`
+	Channels      []string                  `toml:"channels"`
+	DefaultISIL   string                    `toml:"default_isil"`
+	DefaultAFI    string                    `toml:"default_afi"`
+	MaxTags       int                       `toml:"max_tags"`
+	ReadLimit     int64                     `toml:"read_limit"`
+	Themes        ThemeConfig               `toml:"themes"`
+	ElasticSearch ElasticSearchConfig       `toml:"elasticsearch"`
+	SourceRecords []web.SourceRecordMapping `toml:"source_records"`
+	ClientTLS     loader.Config             `toml:"clienttls"`
+	WebTLS        loader.Config             `toml:"webtls"`
 }
 
 // Config is an alias for DataspaceAppConfig.

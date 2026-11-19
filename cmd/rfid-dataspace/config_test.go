@@ -34,6 +34,12 @@ func TestLoadConfig_Default(t *testing.T) {
 	if len(conf.Channels) == 0 || conf.Channels[0] != "mediathek01" {
 		t.Errorf("expected channels ['mediathek01'], got %v", conf.Channels)
 	}
+	if len(conf.SourceRecords) == 0 || conf.SourceRecords[0].Network != "41SLSP_NETWORK" {
+		t.Errorf("expected source records with network '41SLSP_NETWORK', got %v", conf.SourceRecords)
+	}
+	if conf.ElasticSearch.Index != "fhnw_alma-full" {
+		t.Errorf("expected elasticsearch index 'fhnw_alma-full', got '%s'", conf.ElasticSearch.Index)
+	}
 }
 
 func TestLoadConfig_CustomFile(t *testing.T) {
