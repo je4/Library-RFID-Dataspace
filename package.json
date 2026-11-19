@@ -1,0 +1,12 @@
+{
+  "name": "rfid-dataspace",
+  "version": "1.0.0",
+  "description": "RFID Dataspace Dashboard with DaisyUI and HTMX",
+  "scripts": {
+    "build:sass": "sass data/web/static/scss/dataspace.scss data/web/static/scss/dataspace.css --style=compressed",
+    "watch:sass": "sass --watch data/web/static/scss/dataspace.scss:data/web/static/scss/dataspace.css"
+  },
+  "devDependencies": {
+    "sass": "^1.108.2"
+  }
+}

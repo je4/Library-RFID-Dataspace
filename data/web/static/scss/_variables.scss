@@ -1,0 +1,49 @@
+// ==========================================================================
+// RFID Desk SCSS Variables & Ambient Background System
+// DaisyUI 5 Compatible Variables
+// ==========================================================================
+
+:root {
+    --color-bg-body: var(--color-base-100);
+    --color-bg-image: url('../img/background.jpg');
+    --color-bg-overlay: linear-gradient(135deg, rgba(248, 250, 252, 0.48) 0%, rgba(241, 245, 249, 0.62) 100%);
+
+    --scrollbar-track: color-mix(in oklab, var(--color-base-200) 60%, transparent);
+    --scrollbar-thumb: color-mix(in oklab, var(--color-base-content) 25%, transparent);
+    --scrollbar-thumb-hover: color-mix(in oklab, var(--color-base-content) 40%, transparent);
+
+    --scan-flash-bg: color-mix(in oklab, var(--color-primary) 20%, transparent);
+    --scan-flash-shadow: color-mix(in oklab, var(--color-primary) 35%, transparent);
+
+    /* Mediathek 3D Box Parametrisierung Defaults */
+    --mediathek-box-border-width: 8px;
+    --mediathek-box-border-color: #ffffff;
+    --mediathek-box-border-color-hover: #ffffff;
+    --mediathek-box-depth: 18px;
+    --mediathek-box-shadow-color: #f8f8f8;
+    --mediathek-box-bg: color-mix(in oklab, var(--color-base-100, #ffffff) 100%, transparent);
+    --mediathek-box-radius: var(--radius-box, 0px);
+}
+
+.dark,
+[data-theme="dark"],
+[data-theme="mediathek-dark"],
+[data-theme="synthwave"],
+[data-theme="halloween"],
+[data-theme="forest"],
+[data-theme="black"],
+[data-theme="luxury"],
+[data-theme="dracula"],
+[data-theme="business"],
+[data-theme="night"],
+[data-theme="coffee"],
+[data-theme="dim"],
+[data-theme="sunset"],
+[data-theme="abyss"] {
+    --color-bg-overlay: linear-gradient(135deg, rgba(15, 23, 42, 0.55) 0%, rgba(3, 7, 18, 0.68) 100%);
+}
+
+[data-theme="fhnw-dark"],
+[data-theme="unibas-dark"] {
+    --color-bg-overlay: none;
+}

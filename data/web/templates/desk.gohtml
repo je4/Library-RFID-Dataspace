@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="{{lang}}" translate="no"{{if .Theme}} data-theme="{{.Theme}}"{{end}}{{if .ThemeMode}} data-theme-mode="{{.ThemeMode}}"{{end}}{{if .ThemeLight}} data-theme-light="{{.ThemeLight}}"{{end}}{{if .ThemeDark}} data-theme-dark="{{.ThemeDark}}"{{end}}>
+<head>
+    <meta charset="UTF-8">
+    <meta name="google" content="notranslate">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RFID Desk - {{.ClientName}}</title>
+    <link rel="icon" type="image/svg+xml" href="{{.StaticPath}}/img/favicon.svg">
+    <link rel="manifest" href="{{.StaticPath}}/img/manifest.webmanifest">
+    <link rel="apple-touch-icon" href="{{.StaticPath}}/img/app-icon-192.png">
+    <meta name="theme-color" content="#2563eb">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-title" content="RFID Desk">
+    <!-- Automatic Skin & Dark / Light mode detection to prevent FOUC -->
+    <script src="{{.StaticPath}}/js/theme-init.js"></script>
+    <!-- Tailwind CSS, DaisyUI, HTMX 4 & SSE Extension (Relative Paths) -->
+    <link rel="stylesheet" href="{{.StaticPath}}/css/tailwind.min.css">
+    <link rel="stylesheet" href="{{.StaticPath}}/css/daisyui.min.css">
+    <link rel="stylesheet" href="{{.StaticPath}}/css/daisyui-themes.min.css">
+    <script src="{{.StaticPath}}/js/htmx-4.0.js"></script>
+    <script src="{{.StaticPath}}/js/hx-sse.js"></script>
+    <link rel="stylesheet" href="{{.StaticPath}}/scss/desk.css">
+</head>
+<body class="min-h-screen flex flex-col justify-between selection:bg-primary selection:text-primary-content p-4 sm:p-6 lg:p-8" sse-connect="events" data-sse-connect="events" hx-ext="sse">
+
+    {{template "header.gohtml" .}}
+
+    <!-- Main Content Area -->
+    <main class="w-full max-w-7xl mx-auto flex-1 flex flex-col gap-4">
+
+        {{template "nav_tabs.gohtml" .}}
+
+        <!-- Live Scanned Tags Panel -->
+        <section class="card bg-base-100 border border-base-200 shadow-sm rounded-2xl overflow-hidden flex-1 flex flex-col">
+            <!-- Toolbar -->
+            <div class="px-5 sm:px-6 py-3.5 sm:py-4 border-b border-base-200 flex flex-wrap items-center justify-between gap-4">
+                <div class="flex items-center space-x-3">
+                    <div class="flex items-center space-x-2">
+                        <h2 class="text-base font-semibold">{{tr "desk.streamTitle"}}</h2>
+                        <span id="tag-count-badge" class="badge badge-sm badge-outline font-mono">{{len .Tags}}</span>
+                    </div>
+                </div>
+
+                <div class="flex items-center space-x-2.5">
+                    <!-- Stream Pause / Freeze Toggle Button -->
+                    <button id="btn-stream-pause" type="button" class="btn btn-sm btn-ghost border border-base-200 flex items-center gap-1.5" title="{{tr "desk.pauseStreamHint"}}">
+                        <span id="stream-pause-icon" class="w-2 h-2 rounded-full bg-success pulse-indicator" aria-hidden="true"></span>
+                        <span id="stream-pause-label" class="text-xs font-semibold">{{tr "common.live"}}</span>
+                    </button>
+
+                    <!-- Filter Input -->
+                    <div class="relative flex items-center">
+                        <input id="tag-filter-input" type="text" placeholder="{{tr "common.filterPlaceholder"}}" class="input input-sm input-bordered pl-8 pr-12 w-48 sm:w-64 font-mono text-xs">
+                        <span class="app-icon icon-search w-3.5 h-3.5 text-base-content/50 absolute left-2.5 pointer-events-none" aria-hidden="true"></span>
+                        <kbd class="kbd kbd-xs bg-base-200 text-base-content/60 absolute right-2 pointer-events-none">F2</kbd>
+                    </div>
+
+                    <!-- Clear List Button (HTMX 4 POST) -->
+                    <button hx-post="tags/clear" hx-target="#tags-table-body" hx-swap="innerHTML" type="button" class="btn btn-sm btn-ghost text-error hover:bg-error hover:text-error-content flex items-center gap-1.5" title="{{tr "tag.clearList"}}">
+                        <span class="app-icon icon-trash w-3.5 h-3.5 shrink-0" aria-hidden="true"></span>
+                        <span>{{tr "common.clear"}}</span>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Tags Table with SSE Connection -->
+            <div class="transponder-stream-scroll flex-1 overflow-x-auto">
+                <table class="table table-zebra table-pin-rows w-full text-left border-collapse">
+                    <thead class="sticky top-0 z-10 bg-base-200 text-base-content/80 font-bold">
+                        <tr class="text-[11px] font-semibold uppercase tracking-wider text-base-content/70">
+                            <th scope="col" class="py-3 px-4 sm:px-5 whitespace-nowrap">{{tr "item.id"}}</th>
+                            <th scope="col" class="py-3 px-4 sm:px-5 whitespace-nowrap">{{tr "tag.uid"}}</th>
+                            <th scope="col" class="py-3 px-4 sm:px-5 whitespace-nowrap">{{tr "reader.sender"}}</th>
+                            <th scope="col" class="py-3 px-4 sm:px-5 whitespace-nowrap">{{tr "library.isil"}}</th>
+                            <th scope="col" class="py-3 px-4 sm:px-5 whitespace-nowrap">{{tr "encode.parts"}}</th>
+                            <th scope="col" class="py-3 px-4 sm:px-5 whitespace-nowrap">{{tr "tag.crc"}}</th>
+                            <th scope="col" class="py-3 px-4 sm:px-5 whitespace-nowrap">{{tr "afi.label"}}</th>
+                            <th scope="col" class="py-3 px-4 sm:px-5 text-right whitespace-nowrap">{{tr "inventory.scanTime"}}</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tags-table-body" sse-swap="tag_read" data-sse-swap="tag_read" hx-swap="afterbegin">
+                        {{template "tags_table.gohtml" .}}
+                    </tbody>
+                </table>
+            </div>
+        </section>
+
+    </main>
+
+    {{template "footer.gohtml" .}}
+
+    <!-- Interactive script for audio, counters and filtering (Relative Path) -->
+    <script type="module" src="{{.StaticPath}}/js/desk.js"></script>
+</body>
+</html>

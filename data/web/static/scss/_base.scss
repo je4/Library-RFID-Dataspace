@@ -1,0 +1,83 @@
+// ==========================================================================
+// Base Layout, Animations, Spacing Utilities & Responsive Grid System
+// ==========================================================================
+
+:root {
+    --spacing: 0.25rem;
+}
+
+body {
+    background-color: var(--color-bg-body, var(--color-base-100));
+    background-image: var(--color-bg-overlay), var(--color-bg-image);
+    background-size: cover;
+    background-position: center center;
+    background-attachment: fixed;
+    background-repeat: no-repeat;
+    color: var(--color-base-content, #1f2937);
+    transition: background-color 0.2s ease, color 0.2s ease;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    padding: 1rem;
+
+    @media (min-width: 640px) {
+        padding: 1.5rem;
+    }
+
+    @media (min-width: 1024px) {
+        padding: 2rem;
+    }
+}
+
+// Layout structural spacing defaults
+header.navbar {
+    margin-bottom: 1.5rem;
+    position: relative;
+    z-index: 30;
+}
+
+main {
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+}
+
+footer.footer {
+    margin-top: 1.5rem;
+}
+
+// Scanning Flash Animation
+@keyframes scan-flash {
+    0% {
+        background-color: var(--scan-flash-bg);
+        box-shadow: 0 0 15px var(--scan-flash-shadow);
+    }
+    100% {
+        background-color: transparent;
+        box-shadow: none;
+    }
+}
+
+.animate-scan-flash {
+    animation: scan-flash 2.5s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+// Global Scrollbar
+::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+}
+
+::-webkit-scrollbar-track {
+    background: var(--scrollbar-track);
+}
+
+::-webkit-scrollbar-thumb {
+    background: var(--scrollbar-thumb);
+    border-radius: 9999px;
+
+    &:hover {
+        background: var(--scrollbar-thumb-hover);
+    }
+}

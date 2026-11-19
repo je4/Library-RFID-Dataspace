@@ -1,0 +1,15 @@
+{{if .Tags}}
+    {{range .Tags}}
+        {{template "tag_row.gohtml" .}}
+    {{end}}
+{{else}}
+    <tr id="no-tags-row">
+        <td colspan="8" class="py-12 text-center">
+            <div class="flex flex-col items-center justify-center space-y-2">
+                <img src="{{.StaticPath}}/img/icons/empty-tags.svg" class="w-10 h-10 opacity-40 animate-pulse" alt="{{tr "reader.noTags"}}" />
+                <p class="text-sm font-semibold text-base-content/80">{{tr "inventory.noTagsScanned"}}</p>
+                <p class="text-xs text-base-content/60">{{tr "desk.scanHint"}}</p>
+            </div>
+        </td>
+    </tr>
+{{end}}

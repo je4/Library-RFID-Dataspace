@@ -1,0 +1,95 @@
+// ==========================================================================
+// Modal Dialogs & Mouseover Detail Flyouts
+// ==========================================================================
+
+.app-isil-container {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    max-width: 320px;
+}
+
+.app-isil-info-wrapper {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+
+    &:hover,
+    &:focus-within {
+        z-index: 100;
+    }
+}
+
+.app-isil-info-btn {
+    cursor: pointer;
+    border-radius: 0.25rem;
+    padding: 0.125rem;
+    margin: -0.125rem;
+    line-height: 1;
+    transition: transform 0.15s ease, opacity 0.15s ease;
+
+    &:hover {
+        transform: scale(1.15);
+    }
+}
+
+.dark,
+[data-theme="dark"],
+[data-theme="mediathek-dark"],
+[data-theme="synthwave"],
+[data-theme="black"],
+[data-theme="abyss"] {
+    .app-isil-info-btn img {
+        filter: invert(1);
+    }
+}
+
+// Global Floating Flyout Portal (appended to document.body)
+#app-global-isil-flyout,
+.app-isil-flyout {
+    position: fixed;
+    z-index: 99999;
+    min-width: 320px;
+    max-width: min(440px, calc(100vw - 32px));
+    max-height: calc(100vh - 32px);
+    overflow-y: auto;
+    background: var(--color-base-100);
+    border: 1px solid color-mix(in oklab, var(--color-base-content) 15%, transparent);
+    border-radius: var(--radius-box, 0.875rem);
+    box-shadow: 0 16px 36px -4px rgba(0, 0, 0, 0.25), 0 6px 16px -2px rgba(0, 0, 0, 0.15);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    padding: 0.875rem 1rem;
+    color: var(--color-base-content);
+    opacity: 0;
+    visibility: hidden;
+    transform: translateY(4px) scale(0.98);
+    transition: opacity 0.15s cubic-bezier(0.16, 1, 0.3, 1), transform 0.15s cubic-bezier(0.16, 1, 0.3, 1), visibility 0.15s;
+    pointer-events: none;
+    text-align: left;
+    white-space: normal;
+    word-break: break-word;
+    overflow-wrap: break-word;
+
+    &.is-visible {
+        opacity: 1;
+        visibility: visible;
+        transform: translateY(0) scale(1);
+        pointer-events: auto;
+    }
+}
+
+
+.dark,
+[data-theme="dark"],
+[data-theme="synthwave"],
+[data-theme="black"],
+[data-theme="abyss"] {
+    #app-global-isil-flyout,
+    .app-isil-flyout {
+        background: rgba(15, 23, 42, 0.95);
+        border-color: rgba(51, 65, 85, 0.85);
+        box-shadow: 0 20px 40px -4px rgba(0, 0, 0, 0.6), 0 8px 20px -2px rgba(0, 0, 0, 0.4);
+    }
+}

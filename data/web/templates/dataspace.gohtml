@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="{{lang}}" translate="no"{{if .Theme}} data-theme="{{.Theme}}"{{end}}{{if .ThemeMode}} data-theme-mode="{{.ThemeMode}}"{{end}}{{if .ThemeLight}} data-theme-light="{{.ThemeLight}}"{{end}}{{if .ThemeDark}} data-theme-dark="{{.ThemeDark}}"{{end}}>
+<head>
+    <meta charset="UTF-8">
+    <meta name="google" content="notranslate">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{printf (tr "loan.title") .ClientName}}</title>
+    <link rel="icon" type="image/svg+xml" href="{{.StaticPath}}/img/favicon.svg">
+    <link rel="manifest" href="{{.StaticPath}}/img/manifest.webmanifest">
+    <link rel="apple-touch-icon" href="{{.StaticPath}}/img/app-icon-192.png">
+    <meta name="theme-color" content="#2563eb">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-title" content="RFID Dataspace">
+    <!-- Automatic Skin & Dark / Light mode detection to prevent FOUC -->
+    <script src="{{.StaticPath}}/js/theme-init.js"></script>
+    <!-- Tailwind CSS, DaisyUI, HTMX 4 & SSE Extension (Relative Paths) -->
+    <link rel="stylesheet" href="{{.StaticPath}}/css/tailwind.min.css">
+    <link rel="stylesheet" href="{{.StaticPath}}/css/daisyui.min.css">
+    <link rel="stylesheet" href="{{.StaticPath}}/css/daisyui-themes.min.css">
+    <script src="{{.StaticPath}}/js/htmx-4.0.js"></script>
+    <script src="{{.StaticPath}}/js/hx-sse.js"></script>
+    <link rel="stylesheet" href="{{.StaticPath}}/scss/dataspace.css">
+</head>
+<body class="min-h-screen flex flex-col justify-between selection:bg-primary selection:text-primary-content p-4 sm:p-6 lg:p-8" sse-connect="events" data-sse-connect="events" hx-ext="sse">
+
+    {{template "header.gohtml" .}}
+
+    <!-- Main Content Area -->
+    <main class="w-full max-w-7xl mx-auto flex-1 flex flex-col gap-4">
+
+        <!-- Active Media Table & Control Panel -->
+        <section class="card bg-base-100 border border-base-200 shadow-sm rounded-2xl overflow-hidden flex-1 flex flex-col">
+            <!-- Action Toolbar -->
+            <div class="px-5 sm:px-6 py-3.5 sm:py-4 border-b border-base-200 flex flex-wrap items-center justify-between gap-4">
+                <div class="flex items-center space-x-3">
+                    <div class="flex items-center space-x-2">
+                        <h2 class="text-base font-semibold">{{tr "reader.items"}}</h2>
+                        <span id="loan-tag-count-badge" class="badge badge-sm badge-outline font-mono">{{len .Tags}}</span>
+                    </div>
+                </div>
+
+                <!-- Primary Action Buttons: Copy All ItemIDs, Entsichern, Sichern -->
+                <div class="flex items-center flex-wrap gap-2">
+                    <!-- Copy All Item IDs Button -->
+                    <button id="btn-copy-all-itemids" type="button" class="btn btn-sm btn-ghost flex items-center gap-1.5" title="{{tr "table.copyAllIdsHint"}}">
+                        <span class="app-icon icon-copy w-3.5 h-3.5 shrink-0" aria-hidden="true"></span>
+                        <span id="copy-all-label">{{tr "table.copyIds"}}</span>
+                        <kbd class="kbd kbd-xs bg-base-200 text-base-content/70 border border-base-300">Alt+C</kbd>
+                    </button>
+
+                    <!-- Unsecure Button (AFI C2) -->
+                    <button id="btn-unsecure" hx-post="loan/afi/unsecure" hx-target="#loan-table-body" hx-swap="innerHTML" type="button" class="btn btn-sm btn-outline btn-warning flex items-center gap-1.5" title="{{tr "afi.unsecureHint"}}">
+                        <span class="app-icon icon-lock-open w-3.5 h-3.5 shrink-0" aria-hidden="true"></span>
+                        <span id="btn-unsecure-label">{{tr "afi.unsecure"}}</span>
+                        <kbd class="kbd kbd-xs bg-base-200/80 text-base-content/80 border border-warning/40">Alt+U</kbd>
+                    </button>
+
+                    <!-- Secure Button (AFI 07) -->
+                    <button id="btn-secure" hx-post="loan/afi/secure" hx-target="#loan-table-body" hx-swap="innerHTML" type="button" class="btn btn-sm btn-outline btn-info flex items-center gap-1.5" title="{{tr "afi.secureHint"}}">
+                        <span class="app-icon icon-lock-closed w-3.5 h-3.5 shrink-0" aria-hidden="true"></span>
+                        <span id="btn-secure-label">{{tr "afi.secure"}}</span>
+                        <kbd class="kbd kbd-xs bg-base-200/80 text-base-content/80 border border-info/40">Alt+S</kbd>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Status Notification Banner -->
+            <div id="action-notification" class="hidden px-4 py-2 text-xs font-medium border-b border-base-200 transition-all flex items-center justify-between">
+                <span id="action-notification-text"></span>
+            </div>
+
+            <!-- Active Tags Table with SSE Connection -->
+            <div class="transponder-stream-scroll flex-1 overflow-x-auto">
+                <table class="table table-zebra table-pin-rows w-full text-left border-collapse">
+                    <thead class="sticky top-0 z-10 bg-base-200 text-base-content/80 font-bold">
+                        <tr class="text-[11px] font-semibold uppercase tracking-wider text-base-content/70">
+                            <th scope="col" class="py-3 px-4 sm:px-5 whitespace-nowrap">{{tr "item.id"}}</th>
+                            <th scope="col" class="py-3 px-4 sm:px-5 whitespace-nowrap">{{tr "tag.uid"}}</th>
+                            <th scope="col" class="py-3 px-4 sm:px-5 whitespace-nowrap">{{tr "encode.parts"}}</th>
+                            <th scope="col" class="py-3 px-4 sm:px-5 whitespace-nowrap">{{tr "library.isil"}}</th>
+                            <th scope="col" class="py-3 px-4 sm:px-5 whitespace-nowrap">{{tr "tag.crc"}}</th>
+                            <th scope="col" class="py-3 px-4 sm:px-5">{{tr "afi.securityStatus"}}</th>
+                            <th scope="col" class="py-3 px-4 sm:px-5 whitespace-nowrap">{{tr "common.actions"}}</th>
+                            <th scope="col" class="py-3 px-4 sm:px-5 text-right whitespace-nowrap">{{tr "inventory.scanTime"}}</th>
+                        </tr>
+                    </thead>
+                    <tbody id="loan-table-body" sse-swap="loan_tags" data-sse-swap="loan_tags" hx-swap="innerHTML">
+                        {{template "loan_table.gohtml" .}}
+                    </tbody>
+                </table>
+            </div>
+        </section>
+
+    </main>
+
+    {{template "footer.gohtml" .}}
+
+    <!-- AFI Writing Modal Dialog / Waiting Overlay -->
+    <dialog id="afi-modal-overlay" class="modal modal-bottom sm:modal-middle" aria-hidden="true" role="dialog" aria-modal="true" aria-labelledby="afi-modal-title">
+        <div class="modal-box text-center max-w-md bg-base-100 border border-base-200 shadow-xl">
+            <div class="mx-auto mb-4 flex items-center justify-center">
+                <span class="loading loading-spinner loading-lg text-primary"></span>
+            </div>
+            <h3 id="afi-modal-title" class="font-bold text-lg mb-2">{{tr "afi.writing"}}</h3>
+            <p id="afi-modal-message" class="text-sm opacity-80 mb-4">
+                {{tr "afi.waitHint"}}
+            </p>
+            <div class="flex items-center justify-center gap-2 mb-3">
+                <span class="badge badge-info badge-outline gap-1 text-xs">
+                    <span class="w-2 h-2 rounded-full bg-info animate-ping"></span>
+                    <span id="afi-modal-status-text">{{tr "reader.communicationActive"}}</span>
+                </span>
+            </div>
+            <div id="afi-modal-timeout-hint" class="text-xs opacity-60">
+                {{tr "afi.timeoutProtection"}}
+            </div>
+        </div>
+        <form method="dialog" class="modal-backdrop">
+            <button>close</button>
+        </form>
+    </dialog>
+
+    <!-- Interactive script for audio, counters, copy-all and actions (Relative Path) -->
+    <script type="module" src="{{.StaticPath}}/js/dataspace.js"></script>
+</body>
+</html>

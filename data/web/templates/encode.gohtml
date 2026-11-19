@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+<html lang="{{lang}}" translate="no"{{if .Theme}} data-theme="{{.Theme}}"{{end}}{{if .ThemeMode}} data-theme-mode="{{.ThemeMode}}"{{end}}{{if .ThemeLight}} data-theme-light="{{.ThemeLight}}"{{end}}{{if .ThemeDark}} data-theme-dark="{{.ThemeDark}}"{{end}}>
+<head>
+    <meta charset="UTF-8">
+    <meta name="google" content="notranslate">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{printf (tr "encode.title") .ClientName}}</title>
+    <link rel="icon" type="image/svg+xml" href="{{.StaticPath}}/img/favicon.svg">
+    <link rel="manifest" href="{{.StaticPath}}/img/manifest.webmanifest">
+    <link rel="apple-touch-icon" href="{{.StaticPath}}/img/app-icon-192.png">
+    <meta name="theme-color" content="#2563eb">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-title" content="RFID Desk">
+    <!-- Automatic Skin & Dark / Light mode detection to prevent FOUC -->
+    <script src="{{.StaticPath}}/js/theme-init.js"></script>
+    <!-- Tailwind CSS, DaisyUI, HTMX 4 & SSE Extension (Relative Paths) -->
+    <link rel="stylesheet" href="{{.StaticPath}}/css/tailwind.min.css">
+    <link rel="stylesheet" href="{{.StaticPath}}/css/daisyui.min.css">
+    <link rel="stylesheet" href="{{.StaticPath}}/css/daisyui-themes.min.css">
+    <script src="{{.StaticPath}}/js/htmx-4.0.js"></script>
+    <script src="{{.StaticPath}}/js/hx-sse.js"></script>
+    <link rel="stylesheet" href="{{.StaticPath}}/scss/desk.css">
+</head>
+<body class="min-h-screen flex flex-col justify-between selection:bg-primary selection:text-primary-content p-4 sm:p-6 lg:p-8" sse-connect="events" data-sse-connect="events" hx-ext="sse">
+
+    {{template "header.gohtml" .}}
+
+    <!-- Main Content Area -->
+    <main class="w-full max-w-7xl mx-auto flex-1 flex flex-col gap-4">
+
+        {{template "nav_tabs.gohtml" .}}
+
+        <!-- Form & Controls Panel for Encoding (Soll-Zustand) -->
+        <section class="card bg-base-100 border border-base-200 shadow-sm rounded-2xl overflow-hidden">
+            <div class="px-5 sm:px-6 py-3.5 sm:py-4 border-b border-base-200 bg-base-100 flex flex-wrap items-center justify-between gap-3">
+                <div class="flex items-center space-x-3">
+                    <div class="w-10 h-10 rounded-lg bg-primary/10 border border-primary/20 flex items-center justify-center text-primary shrink-0">
+                        <span class="app-icon icon-tag w-5 h-5 text-primary" aria-hidden="true"></span>
+                    </div>
+                    <div>
+                        <div class="flex items-center gap-2">
+                            <h2 class="text-base font-semibold">{{tr "encode.writeTagHint"}}</h2>
+                        </div>
+                        <p class="text-xs text-base-content/70">{{tr "encode.instructions"}}</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Encoding Input Grid -->
+            <div class="p-5 sm:p-6 lg:p-7">
+                <div class="grid grid-cols-1 md:grid-cols-12 gap-4 sm:gap-6 items-end">
+                    <!-- Barcode / ItemID Input -->
+                    <div class="md:col-span-6 flex flex-col gap-1.5">
+                        <label for="encode-item-id" class="text-xs font-semibold flex items-center justify-between">
+                            <span>{{tr "encode.barcode"}} <span class="text-error">*</span></span>
+                            <span class="text-xs font-normal text-base-content/60">{{tr "encode.requiredHint"}}</span>
+                        </label>
+                        <div class="relative flex items-center">
+                            <input id="encode-item-id" type="text" placeholder="{{tr "encode.barcodePlaceholder"}}" autofocus
+                                   class="input input-bordered w-full font-mono pl-9 pr-12 text-sm"
+                                   autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false">
+                            <span class="app-icon icon-search w-4 h-4 text-base-content/50 absolute left-3 pointer-events-none" aria-hidden="true"></span>
+                            <kbd class="kbd kbd-xs bg-base-200 text-base-content/60 absolute right-3 pointer-events-none">F2</kbd>
+                        </div>
+                    </div>
+
+                    <!-- ISIL Identifier & AFI Toggle Switch -->
+                    <div class="md:col-span-6 flex flex-col gap-1.5">
+                        <div class="flex items-center justify-between">
+                            <label for="encode-isil" class="text-xs font-semibold">
+                                <span>{{tr "library.isil"}}</span>
+                            </label>
+                            <span class="text-xs font-semibold">{{tr "afi.securityStatus"}}</span>
+                        </div>
+                        <div class="flex items-center gap-3">
+                            <input id="encode-isil" type="text" value="{{.DefaultISIL}}" placeholder="CH-000001"
+                                   class="input input-bordered flex-1 font-mono text-sm">
+                            <label class="label cursor-pointer flex items-center gap-2 border border-base-200 rounded-lg px-3 py-1.5 bg-base-100 hover:bg-base-200/50 transition-colors shrink-0" for="encode-afi-checkbox" title="{{tr "afi.toggleSecurity"}}">
+                                <span id="encode-afi-icon" class="app-icon {{if eq .DefaultAFI "07"}}icon-lock-closed text-primary{{else}}icon-lock-open text-warning{{end}} w-4 h-4 shrink-0" aria-hidden="true"></span>
+                                <span id="encode-afi-label-text" class="text-xs font-semibold select-none whitespace-nowrap">{{if eq .DefaultAFI "07"}}{{tr "afi.securedCode"}}{{else}}{{tr "afi.unsecuredCode"}}{{end}}</span>
+                                <input type="checkbox" id="encode-afi-checkbox" class="toggle toggle-primary toggle-sm" {{if eq .DefaultAFI "07"}}checked{{end}} aria-label="{{tr "afi.securityStatusDescription"}}">
+                            </label>
+                            <input type="hidden" id="encode-afi-input" value="{{if .DefaultAFI}}{{.DefaultAFI}}{{else}}07{{end}}">
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Parts Selection & Start Action Bar -->
+            <div class="px-5 sm:px-6 py-3.5 sm:py-4 bg-base-200/40 border-t border-base-200 flex flex-wrap items-center justify-between gap-4">
+                <!-- Multi-part selector -->
+                <div class="flex items-center flex-wrap gap-3">
+                    <span class="text-xs font-semibold mr-1">{{tr "encode.partsLabel"}}</span>
+                    <input type="hidden" id="encode-parts-input" value="{{.DefaultParts}}">
+                    
+                    <div class="join" id="encode-parts-pills" role="radiogroup" aria-label="{{tr "encode.selectParts"}}">
+                        <button type="button" class="btn btn-sm join-item encode-part-btn {{if eq .DefaultParts 1}}btn-primary app-part-active{{else}}btn-ghost{{end}}" data-parts="1" role="radio" aria-checked="{{if eq .DefaultParts 1}}true{{else}}false{{end}}">1</button>
+                        <button type="button" class="btn btn-sm join-item encode-part-btn {{if eq .DefaultParts 2}}btn-primary app-part-active{{else}}btn-ghost{{end}}" data-parts="2" role="radio" aria-checked="{{if eq .DefaultParts 2}}true{{else}}false{{end}}">2</button>
+                        <button type="button" class="btn btn-sm join-item encode-part-btn {{if eq .DefaultParts 3}}btn-primary app-part-active{{else}}btn-ghost{{end}}" data-parts="3" role="radio" aria-checked="{{if eq .DefaultParts 3}}true{{else}}false{{end}}">3</button>
+                        <button type="button" class="btn btn-sm join-item encode-part-btn {{if eq .DefaultParts 4}}btn-primary app-part-active{{else}}btn-ghost{{end}}" data-parts="4" role="radio" aria-checked="{{if eq .DefaultParts 4}}true{{else}}false{{end}}">4</button>
+                        <button type="button" class="btn btn-sm join-item encode-part-btn {{if eq .DefaultParts 5}}btn-primary app-part-active{{else}}btn-ghost{{end}}" data-parts="5" role="radio" aria-checked="{{if eq .DefaultParts 5}}true{{else}}false{{end}}">5</button>
+                    </div>
+
+                    <!-- Dropdown for 6 to 12 parts -->
+                    <div class="relative inline-flex items-center">
+                        <select id="encode-parts-select" class="select select-sm select-bordered h-8 text-xs font-semibold rounded-lg cursor-pointer" aria-label="{{tr "encode.selectMoreParts"}}">
+                            <option value="" disabled {{if le .DefaultParts 5}}selected{{end}}>{{tr "encode.moreParts"}}</option>
+                            <option value="6" {{if eq .DefaultParts 6}}selected{{end}}>{{tr "encode.parts6"}}</option>
+                            <option value="7" {{if eq .DefaultParts 7}}selected{{end}}>{{tr "encode.parts7"}}</option>
+                            <option value="8" {{if eq .DefaultParts 8}}selected{{end}}>{{tr "encode.parts8"}}</option>
+                            <option value="9" {{if eq .DefaultParts 9}}selected{{end}}>{{tr "encode.parts9"}}</option>
+                            <option value="10" {{if eq .DefaultParts 10}}selected{{end}}>{{tr "encode.parts10"}}</option>
+                            <option value="11" {{if eq .DefaultParts 11}}selected{{end}}>{{tr "encode.parts11"}}</option>
+                            <option value="12" {{if eq .DefaultParts 12}}selected{{end}}>{{tr "encode.parts12"}}</option>
+                        </select>
+                    </div>
+                </div>
+
+                <!-- Start Action Button -->
+                <button id="btn-encode-start" type="button" disabled
+                        class="btn btn-primary font-bold px-5 flex items-center gap-2"
+                        title="{{tr "encode.startHint"}}">
+                    <span class="app-icon icon-tag w-4 h-4 shrink-0" aria-hidden="true"></span>
+                    <span>{{tr "encode.start"}}</span>
+                    <kbd class="kbd kbd-xs bg-primary-content/20 text-primary-content border-none">Enter</kbd>
+                </button>
+            </div>
+        </section>
+
+        <!-- Active Media Table & Control Panel (Ist-Zustand) -->
+        <section class="card bg-base-100 border border-base-200 shadow-sm rounded-2xl overflow-hidden flex-1 flex flex-col">
+            <!-- Action Toolbar -->
+            <div class="px-5 sm:px-6 py-3.5 sm:py-4 border-b border-base-200 flex flex-wrap items-center justify-between gap-4">
+                <div class="flex items-center space-x-3">
+                    <div class="flex items-center space-x-2">
+                        <h2 class="text-base font-semibold">{{tr "reader.currentItems"}}</h2>
+                        <span id="loan-tag-count-badge" class="badge badge-sm badge-outline font-mono">{{len .Tags}}</span>
+                    </div>
+                </div>
+
+                <div class="flex items-center gap-3">
+                    <button id="btn-clear-tag" type="button" class="btn btn-sm btn-outline btn-warning flex items-center gap-1.5" title="{{tr "tag.clearReaderHint"}}">
+                        <span class="app-icon icon-trash w-3.5 h-3.5 shrink-0" aria-hidden="true"></span>
+                        <span>{{tr "tag.clearTag"}}</span>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Status Notification Banner -->
+            <div id="action-notification" class="hidden px-4 py-2 text-xs font-medium border-b border-base-200 transition-all flex items-center justify-between">
+                <span id="action-notification-text"></span>
+            </div>
+
+            <!-- Active Tags Table with SSE Connection -->
+            <div class="transponder-stream-scroll flex-1 overflow-x-auto">
+                <table class="table table-zebra table-pin-rows w-full text-left border-collapse">
+                    <thead class="sticky top-0 z-10 bg-base-200 text-base-content/80 font-bold">
+                        <tr class="text-[11px] font-semibold uppercase tracking-wider text-base-content/70">
+                            <th scope="col" class="py-3 px-4 sm:px-5 whitespace-nowrap">{{tr "item.id"}}</th>
+                            <th scope="col" class="py-3 px-4 sm:px-5 whitespace-nowrap">{{tr "tag.uid"}}</th>
+                            <th scope="col" class="py-3 px-4 sm:px-5 whitespace-nowrap">{{tr "encode.parts"}}</th>
+                            <th scope="col" class="py-3 px-4 sm:px-5 whitespace-nowrap">{{tr "library.isil"}}</th>
+                            <th scope="col" class="py-3 px-4 sm:px-5 whitespace-nowrap">{{tr "tag.crc"}}</th>
+                            <th scope="col" class="py-3 px-4 sm:px-5">{{tr "afi.securityStatus"}}</th>
+                            <th scope="col" class="py-3 px-4 sm:px-5 whitespace-nowrap">{{tr "common.actions"}}</th>
+                            <th scope="col" class="py-3 px-4 sm:px-5 text-right whitespace-nowrap">{{tr "inventory.scanTime"}}</th>
+                        </tr>
+                    </thead>
+                    <tbody id="loan-table-body" sse-swap="loan_tags" data-sse-swap="loan_tags" hx-swap="innerHTML">
+                        {{template "loan_table.gohtml" .}}
+                    </tbody>
+                </table>
+            </div>
+        </section>
+
+    </main>
+
+    {{template "footer.gohtml" .}}
+
+    <!-- Encoding Progress & Waiting Modal Overlay -->
+    <dialog id="encode-modal-overlay" class="modal modal-bottom sm:modal-middle" aria-hidden="true" role="dialog" aria-modal="true" aria-labelledby="encode-modal-title">
+        <div class="modal-box text-center max-w-md bg-base-100 border border-base-200 shadow-xl">
+            <div class="mx-auto mb-4 flex items-center justify-center">
+                <span class="loading loading-spinner loading-lg text-primary" id="encode-spinner-ring"></span>
+            </div>
+            <h3 id="encode-modal-title" class="font-bold text-lg mb-2">{{tr "encode.writing"}}</h3>
+            <p id="encode-modal-message" class="text-sm opacity-80 mb-4">
+                {{tr "encode.writeHint"}}
+            </p>
+            
+            <div class="flex items-center justify-center gap-2 mb-5">
+                <span id="encode-modal-step-badge" class="badge badge-primary badge-outline font-mono font-bold px-3 py-2.5">
+                    {{tr "encode.partOneOfOne"}}
+                </span>
+                <span id="encode-modal-status-text" class="text-xs opacity-75">
+                    {{tr "reader.writeCommandActive"}}
+                </span>
+            </div>
+
+            <div class="modal-action justify-center mt-2">
+                <button id="btn-encode-modal-stop" type="button" class="btn btn-error btn-sm font-semibold">
+                    {{tr "encode.stop"}}
+                </button>
+            </div>
+        </div>
+        <form method="dialog" class="modal-backdrop">
+            <button>close</button>
+        </form>
+    </dialog>
+
+    <!-- Overwrite Confirmation Modal Dialog -->
+    <dialog id="encode-overwrite-overlay" class="modal modal-bottom sm:modal-middle" aria-hidden="true" role="dialog" aria-modal="true" aria-labelledby="overwrite-modal-title">
+        <div class="modal-box text-center max-w-md bg-base-100 border border-base-200 shadow-xl">
+            <div class="w-12 h-12 rounded-full bg-warning/20 text-warning flex items-center justify-center mx-auto mb-4">
+                <span class="app-icon icon-alert-circle w-6 h-6 text-warning" aria-hidden="true"></span>
+            </div>
+            <h3 id="overwrite-modal-title" class="font-bold text-lg mb-2">{{tr "encode.alreadyEncoded"}}</h3>
+            <p class="text-sm opacity-80 mb-4" id="overwrite-modal-desc">
+                {{tr "tag.label"}} <strong id="overwrite-uid" class="font-mono text-primary">E004...</strong> {{tr "encode.containsBarcode"}} <strong id="overwrite-old-item" class="font-mono text-warning">31415...</strong>.
+                <br><br>
+                {{tr "encode.overwriteConfirm"}}
+            </p>
+
+            <div class="modal-action justify-center flex-wrap gap-2.5 pt-2">
+                <button id="btn-overwrite-confirm" type="button" class="btn btn-warning btn-sm font-bold">
+                    {{tr "common.overwrite"}}
+                </button>
+                <button id="btn-overwrite-skip" type="button" class="btn btn-ghost btn-sm" title="{{tr "tag.skipHint"}}">
+                    {{tr "common.skip"}}
+                </button>
+                <button id="btn-overwrite-cancel" type="button" class="btn btn-error btn-sm">
+                    {{tr "common.cancel"}}
+                </button>
+            </div>
+        </div>
+        <form method="dialog" class="modal-backdrop">
+            <button>close</button>
+        </form>
+    </dialog>
+
+    <!-- Interactive script for audio, counters, encoding controller (Relative Path) -->
+    <script type="module" src="{{.StaticPath}}/js/desk.js"></script>
+</body>
+</html>

@@ -1,0 +1,21 @@
+{{if .Items}}
+    {{range .Items}}
+        {{template "inventory_row.gohtml" .}}
+    {{end}}
+{{else}}
+    <tr id="inventory-empty-row">
+        <td colspan="8" class="text-center py-12 text-base-content/50">
+            <div class="flex flex-col items-center justify-center gap-2">
+                {{if .SessionActive}}
+                    <span class="app-icon icon-play w-8 h-8 text-success animate-pulse" aria-hidden="true"></span>
+                    <p class="font-medium text-sm text-base-content/80">{{tr "inventory.active"}}{{if .Marker}} ({{tr "library.location"}} <span class="font-mono font-bold text-primary">{{.Marker}}</span>){{end}}</p>
+                    <p class="text-xs text-base-content/50">{{tr "inventory.scanHint"}}</p>
+                {{else}}
+                    <span class="app-icon icon-archive w-8 h-8 opacity-40" aria-hidden="true"></span>
+                    <p class="font-medium text-sm">{{tr "inventory.noSession"}}</p>
+                    <p class="text-xs text-base-content/40">{{tr "inventory.startHint"}}</p>
+                {{end}}
+            </div>
+        </td>
+    </tr>
+{{end}}
