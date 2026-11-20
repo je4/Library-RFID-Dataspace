@@ -101,3 +101,37 @@
         }
     }
 }
+
+// Dataspace Graph Legend
+.dataspace-graph-legend {
+    background-color: var(--color-base-100, #ffffff);
+    color: var(--color-base-content, #1f2937);
+    border-top: 1px solid color-mix(in oklab, var(--color-base-content) 10%, transparent);
+}
+
+.dataspace-legend-item {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.375rem;
+    padding: 0.25rem 0.5rem;
+    border-radius: 0.375rem;
+    font-size: 0.6875rem;
+    font-weight: 500;
+    line-height: 1.2;
+    background-color: color-mix(in oklab, var(--color-base-content) 4%, var(--color-base-100));
+    border: 1px solid color-mix(in oklab, var(--color-base-content) 12%, transparent);
+    color: var(--color-base-content, #1f2937);
+    white-space: nowrap;
+    user-select: none;
+    transition: background-color 0.15s ease-in-out, border-color 0.15s ease-in-out;
+
+    &:hover {
+        background-color: color-mix(in oklab, var(--color-base-content) 8%, var(--color-base-100));
+        border-color: color-mix(in oklab, var(--color-base-content) 20%, transparent);
+    }
+
+    svg {
+        flex-shrink: 0;
+        display: block;
+    }
+}
