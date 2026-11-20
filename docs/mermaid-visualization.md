@@ -30,6 +30,7 @@ To ensure clarity and accessibility, nodes are visually categorized using semant
 | :--- | :--- | :--- | :--- |
 | **Scanned RFID Tag** | Stadium `([Label])` | `nodeTag` | Bright Emerald / Active physical scan |
 | **Alma Catalog Record** | Rounded Rectangle `[Label]` | `nodeAlma` | Royal Blue / Physical library holding |
+| **InK Digital Archive / Asset** | Rectangle `[Label]` | `nodeInk` | Rose / Mediathek InK digital asset / collection |
 | **OpenAlex Work** | Rounded Rectangle `[Label]` | `nodeWork` | Deep Indigo / Scholarly publication |
 | **Author / Scholar** | Hexagon `{{Label}}` | `nodeAuthor` | Amber / Researcher & creator |
 | **Research Topic** | Cylinder `[(Label)]` | `nodeTopic` | Purple / Specific research topic |
@@ -43,6 +44,7 @@ To ensure clarity and accessibility, nodes are visually categorized using semant
 flowchart LR
     Tag(["nodeTag: RFID Tag"]):::nodeTag
     Alma["nodeAlma: Alma Record"]:::nodeAlma
+    Ink["nodeInk: InK Media / Archive"]:::nodeInk
     Work["nodeWork: OpenAlex Work"]:::nodeWork
     Author{{"nodeAuthor: Author"}}:::nodeAuthor
     Topic[("nodeTopic: Topic")]:::nodeTopic
@@ -52,6 +54,7 @@ flowchart LR
 
     classDef nodeTag fill:#10b981,stroke:#047857,stroke-width:3px,color:#ffffff,font-weight:bold;
     classDef nodeAlma fill:#2563eb,stroke:#1d4ed8,stroke-width:2px,color:#ffffff;
+    classDef nodeInk fill:#db2777,stroke:#9d174d,stroke-width:2px,color:#ffffff;
     classDef nodeWork fill:#4f46e5,stroke:#4338ca,stroke-width:2px,color:#ffffff;
     classDef nodeAuthor fill:#d97706,stroke:#b45309,stroke-width:2px,color:#ffffff;
     classDef nodeTopic fill:#7c3aed,stroke:#6d28d9,stroke-width:2px,color:#ffffff;
@@ -64,6 +67,7 @@ flowchart LR
 %% Reusable Mermaid classDef snippet for Dataspace Graphs
 classDef nodeTag fill:#10b981,stroke:#047857,stroke-width:3px,color:#ffffff,font-weight:bold;
 classDef nodeAlma fill:#2563eb,stroke:#1d4ed8,stroke-width:2px,color:#ffffff;
+classDef nodeInk fill:#db2777,stroke:#9d174d,stroke-width:2px,color:#ffffff;
 classDef nodeWork fill:#4f46e5,stroke:#4338ca,stroke-width:2px,color:#ffffff;
 classDef nodeAuthor fill:#d97706,stroke:#b45309,stroke-width:2px,color:#ffffff;
 classDef nodeTopic fill:#7c3aed,stroke:#6d28d9,stroke-width:2px,color:#ffffff;
@@ -76,7 +80,7 @@ classDef nodeSource fill:#0d9488,stroke:#0f766e,stroke-width:2px,color:#ffffff;
 
 ### 3. Concrete Example 1: Single Scanned Physical Book
 
-The following example visualizes a single scanned physical book (*Heinrich Hertz: Erinnerungen, Briefe, Tagebücher*), linking the physical item to its Alma bibliographic record, author, holding library, and the corresponding OpenAlex work, topic hierarchy, and academic institution.
+The following example visualizes a single scanned physical book (*Heinrich Hertz: Erinnerungen, Briefe, Tagebücher*), linking the physical item to its Alma bibliographic record, author, holding library, related Mediathek InK digital repository assets, and the corresponding OpenAlex work, topic hierarchy, and academic institution.
 
 ```mermaid
 flowchart TD
@@ -86,6 +90,13 @@ flowchart TD
         AlmaBook1["Alma Book: Heinrich Hertz (2010)<br/>ISBN: 978-3-8171-3420-1"]:::nodeAlma
         Library1["FHNW Campus Library Muttenz<br/>ISIL: CH-001884-6"]:::nodeInst
         Shelf1["Shelf: 530.092 HER / EG-104"]:::nodeAlma
+    end
+
+    %% Subgraph: InK Digital Repository
+    subgraph InkSpace ["Mediathek InK & Archive (HGK FHNW)"]
+        InkItem1["InK: Historical Audio Archive<br/>Typ: soundRecording<br/>Sig: zotero2-4278174.QNUBU85W"]:::nodeInk
+        InkColl1["Collection: Archiv HGK Audio / Video"]:::nodeInk
+        InkPlatform["Mediathek InK HGK<br/>mediathek.hgk.fhnw.ch/ink/de"]:::nodeInk
     end
 
     %% Subgraph: Scholarly Graph
@@ -110,6 +121,12 @@ flowchart TD
     AlmaBook1 -->|"held at"| Library1
     AlmaBook1 -->|"located on"| Shelf1
 
+    %% InK Repository Edges
+    AlmaBook1 -->|"digital item / media"| InkItem1
+    InkItem1 -->|"part of collection"| InkColl1
+    InkItem1 -.->|"repository portal"| InkPlatform
+    Author1 -->|"author in InK"| InkItem1
+
     %% Alma to OpenAlex Bridge Edges
     AlmaBook1 -.->|"matched via ISBN / Title"| Work1
     AlmaBook1 -->|"authored by"| Author1
@@ -129,6 +146,7 @@ flowchart TD
     %% Styling classes
     classDef nodeTag fill:#10b981,stroke:#047857,stroke-width:3px,color:#ffffff,font-weight:bold;
     classDef nodeAlma fill:#2563eb,stroke:#1d4ed8,stroke-width:2px,color:#ffffff;
+    classDef nodeInk fill:#db2777,stroke:#9d174d,stroke-width:2px,color:#ffffff;
     classDef nodeWork fill:#4f46e5,stroke:#4338ca,stroke-width:2px,color:#ffffff;
     classDef nodeAuthor fill:#d97706,stroke:#b45309,stroke-width:2px,color:#ffffff;
     classDef nodeTopic fill:#7c3aed,stroke:#6d28d9,stroke-width:2px,color:#ffffff;

@@ -48,3 +48,59 @@ func TestElasticClientDisabled(t *testing.T) {
 		t.Fatalf("expected no client and no error, got %v, %v", client, err)
 	}
 }
+
+func TestSearchInkItems(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("X-Elastic-Product", "Elasticsearch")
+		w.Header().Set("Content-Type", "application/json")
+		responseJSON := `{
+			"took": 2,
+			"timed_out": false,
+			"_shards": {"total": 1, "successful": 1, "skipped": 0, "failed": 0},
+			"hits": {
+				"total": {"value": 1, "relation": "eq"},
+				"max_score": 5.0,
+				"hits": [
+					{
+						"_index": "fhnw_ink",
+						"_id": "forms2-2018.971913",
+						"_score": 5.0,
+						"_source": {
+							"signature": "forms2-2018.971913",
+							"title": "Genderneutrales Design",
+							"type": "thesis",
+							"collectiontitle": "Diplom HGK",
+							"persons": [{"name": "Benjamin Frank Neuenschwander", "role": "creator"}],
+							"acl": {"meta": ["global/guest"]}
+						}
+					}
+				]
+			}
+		}`
+		_, _ = w.Write([]byte(responseJSON))
+	}))
+	defer server.Close()
+
+	client, err := newElasticClient(ElasticSearchConfig{
+		Endpoint: []string{server.URL},
+		APIKey:   "dummy",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	items, err := searchInkItems(context.Background(), client, "fhnw_ink", "12345", []string{"Neuenschwander"}, "Genderneutrales Design", []string{"978-3-00-000000-0"})
+	if err != nil {
+		t.Fatalf("unexpected search error: %v", err)
+	}
+
+	if len(items) != 1 {
+		t.Fatalf("expected 1 item, got %d", len(items))
+	}
+	if items[0].Title != "Genderneutrales Design" {
+		t.Errorf("expected title 'Genderneutrales Design', got %q", items[0].Title)
+	}
+	if items[0].CollectionTitle != "Diplom HGK" {
+		t.Errorf("expected collection 'Diplom HGK', got %q", items[0].CollectionTitle)
+	}
+}

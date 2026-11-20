@@ -33,6 +33,7 @@ base_url = "https://swisscovery.ch/discovery/sourceRecord"
 [elasticsearch]
 endpoint = ["https://elastic.med.campusderkuenste.ch/"]
 index = "fhnw_alma-full"
+ink_index = "fhnw_ink"
 apikey = "%%ELASTIC_APIKEY%%"
 
 [themes]

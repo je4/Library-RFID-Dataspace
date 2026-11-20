@@ -18,6 +18,7 @@ type ThemeConfig struct {
 type ElasticSearchConfig struct {
 	Endpoint []string              `toml:"endpoint"`
 	Index    string                `toml:"index"`
+	InkIndex string                `toml:"ink_index"`
 	APIKey   utilsconfig.EnvString `toml:"apikey"`
 }
 

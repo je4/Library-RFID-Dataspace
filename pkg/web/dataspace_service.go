@@ -30,6 +30,33 @@ type DataspaceGraphResponse struct {
 	Direction string   `json:"direction"`
 }
 
+// InkItem represents a digital asset or record from Mediathek InK (fhnw_ink).
+type InkItem struct {
+	Signature       string      `json:"signature"`
+	SignatureOrig   string      `json:"signatureoriginal,omitempty"`
+	Source          string      `json:"source,omitempty"`
+	Title           string      `json:"title"`
+	Type            string      `json:"type,omitempty"`
+	Date            string      `json:"date,omitempty"`
+	CollectionTitle string      `json:"collectiontitle,omitempty"`
+	Catalog         []string    `json:"catalog,omitempty"`
+	Category        []string    `json:"category,omitempty"`
+	Tags            []string    `json:"tags,omitempty"`
+	Persons         []InkPerson `json:"persons,omitempty"`
+	URL             string      `json:"url,omitempty"`
+	Publisher       string      `json:"publisher,omitempty"`
+	Abstract        string      `json:"abstract,omitempty"`
+}
+
+// InkPerson represents an author, creator, or contributor in an InK record.
+type InkPerson struct {
+	Name string `json:"name"`
+	Role string `json:"role,omitempty"`
+}
+
+// InkSearchFunc searches the fhnw_ink index for matching digital records.
+type InkSearchFunc func(ctx context.Context, barcode string, authors []string, title string, isbns []string) ([]InkItem, error)
+
 type dataspaceLoader struct {
 	svc *dataspaceService
 }
@@ -50,13 +77,15 @@ func (l dataspaceLoader) Reload(ctx context.Context, key string, _ DataspaceGrap
 
 type dataspaceService struct {
 	catalogSearch func(context.Context, string) ([]catalog.Book, error)
+	inkSearch     InkSearchFunc
 	cache         *otter.Cache[string, DataspaceGraphResponse]
 	loader        dataspaceLoader
 }
 
-func newDataspaceService(catalogSearch func(context.Context, string) ([]catalog.Book, error)) *dataspaceService {
+func newDataspaceService(catalogSearch func(context.Context, string) ([]catalog.Book, error), inkSearch InkSearchFunc) *dataspaceService {
 	svc := &dataspaceService{
 		catalogSearch: catalogSearch,
+		inkSearch:     inkSearch,
 		cache: otter.Must(&otter.Options[string, DataspaceGraphResponse]{
 			MaximumSize:      2000,
 			ExpiryCalculator: otter.ExpiryWriting[string, DataspaceGraphResponse](5 * time.Minute),
@@ -154,6 +183,7 @@ func (s *dataspaceService) buildGraph(ctx context.Context, cleanBarcodes []strin
 	}
 
 	var physicalNodes []string
+	var inkNodes []string
 	var scholarlyNodes []string
 	var taxonomyNodes []string
 	var edges []string
@@ -201,6 +231,39 @@ func (s *dataspaceService) buildGraph(ctx context.Context, cleanBarcodes []strin
 			unresolvedID := fmt.Sprintf("Unknown_%d", i+1)
 			addNode(&physicalNodes, unresolvedID, fmt.Sprintf("        %s[\"Medium %s<br/>(Kein Katalogtreffer)\"]:::nodeAlma", unresolvedID, sanitizeMermaidLabel(it.barcode)))
 			addEdge(tagNodeID, "-->", "erfasst", unresolvedID)
+
+			// Try to search InK directly by barcode if available
+			if s.inkSearch != nil {
+				inkItems, err := s.inkSearch(ctx, it.barcode, nil, "", nil)
+				if err == nil && len(inkItems) > 0 {
+					for j, ink := range inkItems {
+						if j >= 2 {
+							break
+						}
+						inkID := fmt.Sprintf("Ink_%d_%d", i+1, j+1)
+						inkTitle := truncateText(ink.Title, 40)
+						inkLabel := fmt.Sprintf("InK: %s", inkTitle)
+						if ink.Type != "" {
+							inkLabel += fmt.Sprintf("<br/>Typ: %s", ink.Type)
+						}
+						if ink.Signature != "" {
+							inkLabel += fmt.Sprintf("<br/>Sig: %s", ink.Signature)
+						}
+						addNode(&inkNodes, inkID, fmt.Sprintf("        %s[\"%s\"]:::nodeInk", inkID, sanitizeMermaidLabel(inkLabel)))
+						addEdge(unresolvedID, "-->", "matched in InK", inkID)
+
+						if ink.CollectionTitle != "" {
+							collID := "InkColl_" + slugify(ink.CollectionTitle)
+							addNode(&inkNodes, collID, fmt.Sprintf("        %s[\"Collection: %s\"]:::nodeInk", collID, sanitizeMermaidLabel(ink.CollectionTitle)))
+							addEdge(inkID, "-->", "collection", collID)
+						}
+
+						inkPortalID := "InkPortal"
+						addNode(&inkNodes, inkPortalID, "        InkPortal[\"Mediathek InK HGK<br/>mediathek.hgk.fhnw.ch/ink/de\"]:::nodeInk")
+						addEdge(inkID, "-.->", "portal", inkPortalID)
+					}
+				}
+			}
 			continue
 		}
 
@@ -216,11 +279,18 @@ func (s *dataspaceService) buildGraph(ctx context.Context, cleanBarcodes []strin
 			pubYear = book.Publications[0].DateString
 		}
 		var isbnStr string
+		var isbnList []string
 		if len(book.ISBNs) > 0 {
-			if book.ISBNs[0].Enriched != "" {
-				isbnStr = book.ISBNs[0].Enriched
-			} else if book.ISBNs[0].ID != "" {
-				isbnStr = book.ISBNs[0].ID
+			for _, isb := range book.ISBNs {
+				if isb.Enriched != "" {
+					isbnList = append(isbnList, isb.Enriched)
+				}
+				if isb.ID != "" {
+					isbnList = append(isbnList, isb.ID)
+				}
+			}
+			if len(isbnList) > 0 {
+				isbnStr = isbnList[0]
 			}
 		}
 
@@ -258,9 +328,11 @@ func (s *dataspaceService) buildGraph(ctx context.Context, cleanBarcodes []strin
 
 		// Authors (Personal & Corporate)
 		var bookAuthors []string
+		var rawAuthorNames []string
 		for _, nameMap := range book.PersonalNames {
 			for _, name := range nameMap {
 				if name.NamePart != "" {
+					rawAuthorNames = append(rawAuthorNames, name.NamePart)
 					authName := sanitizeMermaidLabel(name.NamePart)
 					authNodeID := "Auth_" + slugify(name.NamePart)
 					addNode(&scholarlyNodes, authNodeID, fmt.Sprintf("        %s{{\"Author: %s\"}}:::nodeAuthor", authNodeID, authName))
@@ -272,10 +344,57 @@ func (s *dataspaceService) buildGraph(ctx context.Context, cleanBarcodes []strin
 		for _, nameMap := range book.CorporateNames {
 			for _, name := range nameMap {
 				if name.NamePart != "" {
+					rawAuthorNames = append(rawAuthorNames, name.NamePart)
 					corpName := sanitizeMermaidLabel(name.NamePart)
 					corpNodeID := "Corp_" + slugify(name.NamePart)
 					addNode(&scholarlyNodes, corpNodeID, fmt.Sprintf("        %s[\"Institution: %s\"]:::nodeInst", corpNodeID, corpName))
 					addEdge(almaNodeID, "-->", "contributed by", corpNodeID)
+				}
+			}
+		}
+
+		// Search & Link InK (Mediathek HGK) items
+		if s.inkSearch != nil {
+			inkItems, err := s.inkSearch(ctx, it.barcode, rawAuthorNames, titleStr, isbnList)
+			if err == nil && len(inkItems) > 0 {
+				for j, ink := range inkItems {
+					if j >= 3 {
+						break
+					}
+					inkNodeID := fmt.Sprintf("Ink_%d_%d", i+1, j+1)
+					if ink.Signature != "" {
+						inkNodeID = "Ink_" + slugify(ink.Signature)
+					}
+					inkTitle := truncateText(ink.Title, 40)
+					inkLabel := fmt.Sprintf("InK: %s", inkTitle)
+					if ink.Type != "" {
+						inkLabel += fmt.Sprintf("<br/>Typ: %s", ink.Type)
+					}
+					if ink.Signature != "" {
+						inkLabel += fmt.Sprintf("<br/>Sig: %s", ink.Signature)
+					}
+					addNode(&inkNodes, inkNodeID, fmt.Sprintf("        %s[\"%s\"]:::nodeInk", inkNodeID, sanitizeMermaidLabel(inkLabel)))
+					addEdge(almaNodeID, "-->", "digital item / media", inkNodeID)
+
+					if ink.CollectionTitle != "" {
+						collNodeID := "InkColl_" + slugify(ink.CollectionTitle)
+						addNode(&inkNodes, collNodeID, fmt.Sprintf("        %s[\"Collection: %s\"]:::nodeInk", collNodeID, sanitizeMermaidLabel(ink.CollectionTitle)))
+						addEdge(inkNodeID, "-->", "collection", collNodeID)
+					}
+
+					inkPortalID := "InkPortal"
+					addNode(&inkNodes, inkPortalID, "        InkPortal[\"Mediathek InK HGK<br/>mediathek.hgk.fhnw.ch/ink/de\"]:::nodeInk")
+					addEdge(inkNodeID, "-.->", "portal", inkPortalID)
+
+					// Connect author node if matched
+					for _, p := range ink.Persons {
+						for _, authID := range bookAuthors {
+							if strings.Contains(strings.ToLower(authID), strings.ToLower(slugify(p.Name))) ||
+								strings.Contains(strings.ToLower(p.Name), strings.ToLower(authID)) {
+								addEdge(authID, "-->", "author in InK", inkNodeID)
+							}
+						}
+					}
 				}
 			}
 		}
@@ -413,6 +532,14 @@ func (s *dataspaceService) buildGraph(ctx context.Context, cleanBarcodes []strin
 		sb.WriteString("    end\n\n")
 	}
 
+	if len(inkNodes) > 0 {
+		sb.WriteString("    subgraph InkSpace [\"Mediathek InK & Archive (HGK FHNW)\"]\n")
+		for _, n := range inkNodes {
+			sb.WriteString(n + "\n")
+		}
+		sb.WriteString("    end\n\n")
+	}
+
 	if len(scholarlyNodes) > 0 {
 		sb.WriteString("    subgraph ScholarlyGraph [\"Scholarly Knowledge Graph (OpenAlex)\"]\n")
 		for _, n := range scholarlyNodes {
@@ -436,6 +563,7 @@ func (s *dataspaceService) buildGraph(ctx context.Context, cleanBarcodes []strin
 	sb.WriteString("\n")
 	sb.WriteString("    classDef nodeTag fill:#10b981,stroke:#047857,stroke-width:3px,color:#ffffff,font-weight:bold;\n")
 	sb.WriteString("    classDef nodeAlma fill:#2563eb,stroke:#1d4ed8,stroke-width:2px,color:#ffffff;\n")
+	sb.WriteString("    classDef nodeInk fill:#db2777,stroke:#9d174d,stroke-width:2px,color:#ffffff;\n")
 	sb.WriteString("    classDef nodeWork fill:#4f46e5,stroke:#4338ca,stroke-width:2px,color:#ffffff;\n")
 	sb.WriteString("    classDef nodeAuthor fill:#d97706,stroke:#b45309,stroke-width:2px,color:#ffffff;\n")
 	sb.WriteString("    classDef nodeTopic fill:#7c3aed,stroke:#6d28d9,stroke-width:2px,color:#ffffff;\n")

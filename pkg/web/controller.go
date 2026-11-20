@@ -21,6 +21,7 @@ import (
 // Config defines settings for the rfid-dataspace web server.
 type Config struct {
 	CatalogSearch func(context.Context, string) ([]catalog.Book, error)
+	InkSearch     InkSearchFunc
 	SourceRecords []SourceRecordMapping
 	Addr          string
 	ExtAddr       string
@@ -75,7 +76,7 @@ func NewController(cfg Config) (*Controller, error) {
 	if cfg.CatalogSearch != nil {
 		ctrl.catalogService = newCatalogService(cfg.CatalogSearch)
 	}
-	ctrl.dataspaceService = newDataspaceService(cfg.CatalogSearch)
+	ctrl.dataspaceService = newDataspaceService(cfg.CatalogSearch, cfg.InkSearch)
 
 	// Compile templates for all supported languages
 	ctrl.languageTemplates = make(map[string]*template.Template)

@@ -12,7 +12,7 @@ import (
 )
 
 func TestDataspaceService_Empty(t *testing.T) {
-	svc := newDataspaceService(nil)
+	svc := newDataspaceService(nil, nil)
 	resp, err := svc.GenerateMermaid(context.Background(), nil, "TD")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -55,7 +55,21 @@ func TestDataspaceService_SingleBook(t *testing.T) {
 		}, nil
 	}
 
-	svc := newDataspaceService(mockSearch)
+	mockInk := func(_ context.Context, barcode string, authors []string, title string, isbns []string) ([]InkItem, error) {
+		return []InkItem{
+			{
+				Signature:       "iid-Arbeit-2428",
+				Title:           "Classic Design – Future Design Classics",
+				Type:            "thesis",
+				CollectionTitle: "Archiv Institut Industrial Design",
+				Persons: []InkPerson{
+					{Name: "Fölsing, Albrecht", Role: "creator"},
+				},
+			},
+		}, nil
+	}
+
+	svc := newDataspaceService(mockSearch, mockInk)
 	resp, err := svc.GenerateMermaid(context.Background(), []string{"0001847294"}, "TD")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -66,6 +80,9 @@ func TestDataspaceService_SingleBook(t *testing.T) {
 	}
 	if !strings.Contains(resp.Mermaid, "PhysicalSpace") {
 		t.Errorf("expected PhysicalSpace subgraph in Mermaid")
+	}
+	if !strings.Contains(resp.Mermaid, "InkSpace") {
+		t.Errorf("expected InkSpace subgraph in Mermaid")
 	}
 	if !strings.Contains(resp.Mermaid, "ScholarlyGraph") {
 		t.Errorf("expected ScholarlyGraph subgraph in Mermaid")
@@ -78,6 +95,18 @@ func TestDataspaceService_SingleBook(t *testing.T) {
 	}
 	if !strings.Contains(resp.Mermaid, "classDef nodeAlma") {
 		t.Errorf("expected classDef nodeAlma in Mermaid")
+	}
+	if !strings.Contains(resp.Mermaid, "classDef nodeInk") {
+		t.Errorf("expected classDef nodeInk in Mermaid")
+	}
+	if !strings.Contains(resp.Mermaid, "Classic Design") {
+		t.Errorf("expected InK title in Mermaid")
+	}
+	if !strings.Contains(resp.Mermaid, "Archiv Institut Industrial Design") {
+		t.Errorf("expected InK collection in Mermaid")
+	}
+	if !strings.Contains(resp.Mermaid, "mediathek.hgk.fhnw.ch/ink/de") {
+		t.Errorf("expected InK portal url in Mermaid")
 	}
 	if !strings.Contains(resp.Mermaid, "Fölsing, Albrecht") {
 		t.Errorf("expected author name in Mermaid")
@@ -113,7 +142,7 @@ func TestDataspaceService_MultiBook(t *testing.T) {
 		}
 	}
 
-	svc := newDataspaceService(mockSearch)
+	svc := newDataspaceService(mockSearch, nil)
 	resp, err := svc.GenerateMermaid(context.Background(), []string{"BC-01", "BC-02"}, "LR")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)

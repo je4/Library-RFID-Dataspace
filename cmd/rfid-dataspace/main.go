@@ -41,9 +41,17 @@ func main() {
 		logger.Fatal().Err(err).Msg("cannot initialize Elasticsearch client")
 	}
 	var catalogSearch func(context.Context, string) ([]catalog.Book, error)
+	var inkSearch web.InkSearchFunc
 	if elasticClient != nil {
 		catalogSearch = func(ctx context.Context, barcode string) ([]catalog.Book, error) {
 			return catalog.SearchByBarcode(ctx, elasticClient, conf.ElasticSearch.Index, barcode)
+		}
+		inkIndex := conf.ElasticSearch.InkIndex
+		if inkIndex == "" {
+			inkIndex = "fhnw_ink"
+		}
+		inkSearch = func(ctx context.Context, barcode string, authors []string, title string, isbns []string) ([]web.InkItem, error) {
+			return searchInkItems(ctx, elasticClient, inkIndex, barcode, authors, title, isbns)
 		}
 	}
 
@@ -75,6 +83,7 @@ func main() {
 	// 4. Initialize Web Controller with embedded templates and assets
 	webCtrl, err := web.NewController(web.Config{
 		CatalogSearch: catalogSearch,
+		InkSearch:     inkSearch,
 		SourceRecords: conf.SourceRecords,
 		Addr:          addr,
 		ExtAddr:       extAddr,

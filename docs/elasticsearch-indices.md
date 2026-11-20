@@ -12,7 +12,11 @@ erDiagram
     FHNW_ALMA_FULL ||--o{ OPENALEX_AUTHORS : "matched by Name / ORCID"
     FHNW_ALMA_FULL ||--o{ OPENALEX_TOPICS : "matched by GND / Subject"
     FHNW_ALMA_FULL ||--o{ OPENALEX_INSTITUTIONS : "matched by Library ISIL"
+    FHNW_ALMA_FULL ||--o{ FHNW_INK : "digital assets / CallNumber / Title"
     
+    FHNW_INK ||--o{ OPENALEX_AUTHORS : "matched by contributor names"
+    FHNW_INK ||--o{ OPENALEX_TOPICS : "matched by categories / tags"
+
     OPENALEX_WORKS ||--o{ OPENALEX_AUTHORS : "authorships"
     OPENALEX_WORKS ||--o{ OPENALEX_INSTITUTIONS : "authorship institutions"
     OPENALEX_WORKS ||--o{ OPENALEX_SOURCES : "locations / host journal"
@@ -30,6 +34,7 @@ erDiagram
 | Index Pattern | Entity Type | Primary Role in Dataspace | Approximate Doc Count |
 | :--- | :--- | :--- | :--- |
 | `fhnw_alma-full` | Library Catalog (Alma/MARC21) | Physical items, barcodes, holdings, signatures, MARC bibliographic records | > 10,000 |
+| `fhnw_ink` | Digital Repository & Archive (Mediathek HGK) | Student theses, design archives, video recordings, audio, digital media assets (`https://mediathek.hgk.fhnw.ch/ink/de`) | > 10,000 |
 | `openalex-works` | Scholarly Publications | Articles, books, preprints, DOI, citations, topics, referenced works | ~ 10,000 |
 | `openalex-authors` | Researchers & Contributors | Author profiles, ORCID IDs, affiliations, historical topic areas | ~ 10,000 |
 | `openalex-sources` | Journals, Repositories, Conferences | Publication venues, ISSN-L, publisher host organizations | ~ 10,000 |
@@ -96,9 +101,55 @@ The `fhnw_alma-full` index contains rich bibliographic records converted from Al
 
 ---
 
-### 3. OpenAlex Scholarly Indices (`openalex-*`)
+### 3. Digital Archive & Repository Index (`fhnw_ink`)
 
-#### 3.1 `openalex-works` (Scholarly Works)
+The `fhnw_ink` index contains digital media assets, student theses, video lectures, audio files, and special collection items from the **Mediathek HGK FHNW InK platform** ([https://mediathek.hgk.fhnw.ch/ink/de](https://mediathek.hgk.fhnw.ch/ink/de)).
+
+#### Access Control List (ACL) & Guest Permissions
+* **Important**: InK uses granular Access Control Lists (`acl`). Queries for public/guest frontend representation must strictly filter by:
+  ```json
+  {"term": {"acl.meta.keyword": "global/guest"}}
+  ```
+  or `{"match": {"acl.meta": "global/guest"}}`.
+
+#### Key Fields for Media Retrieval & Dataspace Graph Linking
+
+* **Identifiers & Routing**:
+  * `signature`: Unique InK record identifier (e.g. `forms2-2018.971913`, `zotero2-2612786.GTX524X5`, `iid-Arbeit-2428`).
+  * `signatureoriginal`: Original signature or item identifier.
+  * **Detail URL pattern**: `https://mediathek.hgk.fhnw.ch/ink/detail/<signature>/de`
+  * **Search URL pattern**: `https://mediathek.hgk.fhnw.ch/ink/grid/de?search=<query>`
+  * `source`: Source system or catalog namespace (e.g. `forms2-2018`, `zotero2`, `iid-Arbeit`, `kasko`).
+
+* **Bibliographic Data**:
+  * `title`: Title of the work, thesis, artwork, video recording, or project.
+  * `collectiontitle`: Archive collection name (e.g., *Diplom HGK*, *Archiv Institut Industrial Design*, *Kasko_Digital*, *Beispiel_Enge-Gusewski*).
+  * `series`: Series title or semester workshop designation.
+  * `place`: Place of origin (e.g. *Basel*, *Aarau*).
+  * `date`: Year or date string (e.g. `2018`, `2016-05-25`).
+  * `publisher`: Publishing or producing entity.
+  * `abstract`: Descriptive text or project summary.
+
+* **Creators & Contributors**:
+  * `persons[]`: Array of contributor objects with `persons[].name` and `persons[].role` (e.g. `creator`, `director`, `author`, `student`).
+  * `statistics.person[]`: Aggregated list of person entities.
+
+* **Classification & Categorization**:
+  * `catalog[]`: InK catalog buckets (e.g. `lehrenlernen`, `diplom`, `archiv`).
+  * `category[]`: Hierarchical category tags (e.g. `zotero2!!Beispiel_Enge-Gusewski`).
+  * `tags[]`: Subject and thematic tags.
+  * `type` / `mediatype[]`: Media type descriptor (e.g. `videoRecording`, `thesis`, `audio`, `image`, `document`).
+
+* **Meta & External References**:
+  * `meta[]`: Key-value properties including `CallNumber`, `ISBN`, `Creators`, `ItemType`, `Url`, `DateAdded`.
+  * `url`: Direct link to external media resources (e.g. YouTube, project website, repository).
+  * `media`: Embedded media assets with MIME types, image dimensions, URIs, and durations.
+
+---
+
+### 4. OpenAlex Scholarly Indices (`openalex-*`)
+
+#### 4.1 `openalex-works` (Scholarly Works)
 Represents journal articles, monographs, conference papers, preprints, and datasets.
 
 * `id`: Canonical OpenAlex work ID (URI format: `https://openalex.org/W...`).
@@ -138,7 +189,7 @@ Represents journal articles, monographs, conference papers, preprints, and datas
 * `cited_by_count`: Total citation count.
 * `grants[]`: Funding information (`funder`, `funder_display_name`, `award_id`).
 
-#### 3.2 `openalex-authors` (Authors & Researchers)
+#### 4.2 `openalex-authors` (Authors & Researchers)
 Represents scholars and contributing creators.
 
 * `id`: Author URI (`https://openalex.org/A...`).
@@ -153,7 +204,7 @@ Represents scholars and contributing creators.
 * `cited_by_count`: Total received citations.
 * `summary_stats`: Statistical indicators (`h_index`, `i10_index`, `2yr_mean_citedness`).
 
-#### 3.3 `openalex-topics`, `subfields`, `fields`, and `domains` (Knowledge Taxonomy)
+#### 4.3 `openalex-topics`, `subfields`, `fields`, and `domains` (Knowledge Taxonomy)
 Represents OpenAlex's 4-tier hierarchical topic classification system.
 
 * **`openalex-topics`**:
@@ -179,7 +230,7 @@ Represents OpenAlex's 4-tier hierarchical topic classification system.
   * `id`: Domain URI (`https://openalex.org/domains/...`).
   * `display_name`: Domain name (*Physical Sciences*, *Life Sciences*, *Health Sciences*, *Social Sciences*).
 
-#### 3.4 `openalex-institutions` (Institutions & Universities)
+#### 4.4 `openalex-institutions` (Institutions & Universities)
 Represents research institutions, libraries, and universities.
 
 * `id`: Institution URI (`https://openalex.org/I...`).
@@ -190,6 +241,6 @@ Represents research institutions, libraries, and universities.
 * `associated_institutions[]`: Sub-colleges, partner facilities, or parent universities.
 * `geo`: Geographic coordinates (`city`, `region`, `country`, `latitude`, `longitude`).
 
-#### 3.5 `openalex-sources` & `openalex-publishers`
+#### 4.5 `openalex-sources` & `openalex-publishers`
 * **`openalex-sources`**: Journal and conference venue profiles (`id`, `display_name`, `issn_l`, `host_organization`, `type`).
 * **`openalex-publishers`**: Publishing entities and parent conglomerates (`id`, `display_name`, `country_codes`, `hierarchy_level`, `parent_publisher`).

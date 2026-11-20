@@ -12,15 +12,19 @@ flowchart TD
     Barcode -->|"Elasticsearch search.identifier.keyword"| Alma["fhnw_alma-full Record"]
     
     Alma -->|"Internal Linking"| AlmaRel["Alma Relations<br/>• Same Author<br/>• Same Subject / GND<br/>• Shelf Neighbors"]
+    Alma -->|"Digital Archive Bridge"| InkBridge["Mediathek InK Matcher<br/>• CallNumber / Barcode Match<br/>• Creator / Author Match<br/>• Title & Collection Match<br/>• ACL Filter: global/guest"]
     Alma -->|"Entity Resolution Bridge"| Bridge["OpenAlex Matcher<br/>• Exact DOI / ISBN Match<br/>• Title & Author Fuzzy Search<br/>• Author Name / ORCID Match<br/>• GND Subject Topic Mapping"]
     
+    InkBridge -->|"Archive Expansion"| InkGraph["Mediathek InK Assets<br/>• Student Theses & Projects<br/>• Video & Audio Recordings<br/>• Institute & Archive Collections<br/>• mediathek.hgk.fhnw.ch/ink/de"]
     Bridge -->|"Graph Expansion"| OAGraph["OpenAlex Scholarly Graph<br/>• Works & Citation Chains<br/>• Authors & Affiliated Institutions<br/>• Topics, Subfields, Fields & Domains<br/>• Publishing Sources & Funders"]
 
     classDef accent fill:#2563eb,stroke:#1d4ed8,stroke-width:2px,color:#ffffff;
+    classDef inkAccent fill:#db2777,stroke:#9d174d,stroke-width:2px,color:#ffffff;
     classDef highlight fill:#10b981,stroke:#047857,stroke-width:2px,color:#ffffff;
     classDef oaGraph fill:#7c3aed,stroke:#6d28d9,stroke-width:2px,color:#ffffff;
     class NFC,Barcode highlight;
     class Alma,AlmaRel,Bridge accent;
+    class InkBridge,InkGraph inkAccent;
     class OAGraph oaGraph;
 ```
 

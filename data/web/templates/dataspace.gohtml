@@ -69,7 +69,7 @@
         <!-- Dataspace Knowledge Graph Section (Mermaid Diagram) -->
         <section id="dataspace-graph-section" class="card bg-base-100 border border-base-200 shadow-sm rounded-2xl overflow-hidden flex flex-col min-h-[520px]">
             <!-- Action / Toolbar Header -->
-            <div class="px-5 sm:px-6 py-3.5 sm:py-4 border-b border-base-200 flex flex-wrap items-center justify-between gap-4 bg-base-100">
+            <div class="dataspace-graph-header px-5 sm:px-6 py-3.5 sm:py-4 border-b border-base-200 flex flex-wrap items-center justify-between gap-4 bg-base-100">
                 <div class="flex items-center space-x-3">
                     <div class="w-9 h-9 rounded-xl bg-primary/10 text-primary flex items-center justify-center shrink-0">
                         <img src="{{.StaticPath}}/img/icons/chip.svg" class="w-5 h-5" alt="Graph" />
@@ -99,9 +99,14 @@
                     </div>
 
                     <!-- Fullscreen Toggle -->
-                    <button type="button" id="graph-fullscreen-btn" class="btn btn-xs btn-outline gap-1" title="{{tr "dataspace.fullscreen"}}">
-                        <img src="{{.StaticPath}}/img/icons/external-link.svg" class="w-3.5 h-3.5" alt="Fullscreen" />
-                        <span class="hidden sm:inline">{{tr "dataspace.expand"}}</span>
+                    <button type="button" id="graph-fullscreen-btn" class="btn btn-xs btn-outline gap-1" title="{{tr "dataspace.fullscreen"}}" data-expand-text="{{tr "dataspace.expand"}}" data-collapse-text="{{tr "dataspace.collapse"}}">
+                        <svg id="graph-fullscreen-expand-icon" class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"/>
+                        </svg>
+                        <svg id="graph-fullscreen-collapse-icon" class="w-3.5 h-3.5 hidden" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M4 14h6v6M20 10h-6V4M14 10l7-7M3 21l7-7"/>
+                        </svg>
+                        <span id="graph-fullscreen-text" class="hidden sm:inline">{{tr "dataspace.expand"}}</span>
                     </button>
 
                     <!-- Refresh Button -->
@@ -133,13 +138,14 @@
             </div>
 
             <!-- Legend Footer Bar -->
-            <div class="px-5 py-2.5 border-t border-base-200 bg-base-100/80 text-[11px] flex flex-wrap items-center justify-between gap-2">
+            <div class="dataspace-graph-legend px-5 py-2.5 border-t border-base-200 bg-base-100/80 text-[11px] flex flex-wrap items-center justify-between gap-2">
                 <div class="flex items-center gap-1.5 text-base-content/60 font-semibold mr-1">
                     <span>{{tr "dataspace.legend"}}:</span>
                 </div>
-                <div class="flex flex-wrap items-center gap-2">
+                <div class="flex flex-wrap items-center gap-1.5">
                     <span class="badge badge-xs text-[10px] font-medium py-2 px-2.5 bg-[#10b981] text-white border-0">{{tr "dataspace.legendTag"}}</span>
                     <span class="badge badge-xs text-[10px] font-medium py-2 px-2.5 bg-[#2563eb] text-white border-0">{{tr "dataspace.legendAlma"}}</span>
+                    <span class="badge badge-xs text-[10px] font-medium py-2 px-2.5 bg-[#db2777] text-white border-0">{{tr "dataspace.legendInk"}}</span>
                     <span class="badge badge-xs text-[10px] font-medium py-2 px-2.5 bg-[#4f46e5] text-white border-0">{{tr "dataspace.legendWork"}}</span>
                     <span class="badge badge-xs text-[10px] font-medium py-2 px-2.5 bg-[#d97706] text-white border-0">{{tr "dataspace.legendAuthor"}}</span>
                     <span class="badge badge-xs text-[10px] font-medium py-2 px-2.5 bg-[#7c3aed] text-white border-0">{{tr "dataspace.legendTopic"}}</span>

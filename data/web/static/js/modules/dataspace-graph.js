@@ -238,21 +238,97 @@ export function initDataspaceGraph() {
         }
     });
 
-    // Fullscreen toggle
+    // Fullscreen state helpers
+    const isSectionFullscreen = () => {
+        return document.fullscreenElement === graphSection || graphSection.classList.contains('is-fullscreen');
+    };
+
+    const updateFullscreenUI = () => {
+        const isFull = isSectionFullscreen();
+        const expandIcon = document.getElementById('graph-fullscreen-expand-icon');
+        const collapseIcon = document.getElementById('graph-fullscreen-collapse-icon');
+        const textSpan = document.getElementById('graph-fullscreen-text');
+        const btn = document.getElementById('graph-fullscreen-btn');
+
+        if (expandIcon && collapseIcon) {
+            if (isFull) {
+                expandIcon.classList.add('hidden');
+                collapseIcon.classList.remove('hidden');
+            } else {
+                expandIcon.classList.remove('hidden');
+                collapseIcon.classList.add('hidden');
+            }
+        }
+
+        if (textSpan && btn) {
+            const expandText = btn.dataset.expandText || 'Vollbild';
+            const collapseText = btn.dataset.collapseText || 'Verkleinern';
+            textSpan.textContent = isFull ? collapseText : expandText;
+        }
+
+        if (isFull) {
+            document.body.classList.add('overflow-hidden');
+        } else {
+            document.body.classList.remove('overflow-hidden');
+        }
+
+        setTimeout(() => resetZoomAndPan(output), 150);
+    };
+
+    const toggleFullscreen = async () => {
+        if (isSectionFullscreen()) {
+            if (document.fullscreenElement) {
+                try {
+                    await document.exitFullscreen();
+                } catch (e) {
+                    console.warn('[Dataspace Graph] Exit fullscreen error:', e);
+                }
+            }
+            graphSection.classList.remove('is-fullscreen');
+            updateFullscreenUI();
+        } else {
+            if (graphSection.requestFullscreen) {
+                try {
+                    await graphSection.requestFullscreen();
+                    graphSection.classList.add('is-fullscreen');
+                    updateFullscreenUI();
+                    return;
+                } catch (e) {
+                    console.warn('[Dataspace Graph] Native fullscreen rejected, falling back to CSS overlay:', e);
+                }
+            }
+            graphSection.classList.add('is-fullscreen');
+            updateFullscreenUI();
+        }
+    };
+
+    // Fullscreen toggle event
     const fullscreenBtn = document.getElementById('graph-fullscreen-btn');
     if (fullscreenBtn) {
-        fullscreenBtn.addEventListener('click', () => {
-            const isFull = graphSection.classList.toggle('fixed');
-            if (isFull) {
-                graphSection.classList.add('inset-0', 'z-50', 'rounded-none', 'p-6', 'bg-base-100', 'shadow-2xl');
-                document.body.style.overflow = 'hidden';
-            } else {
-                graphSection.classList.remove('inset-0', 'z-50', 'rounded-none', 'p-6', 'bg-base-100', 'shadow-2xl');
-                document.body.style.overflow = '';
-            }
-            setTimeout(() => resetZoomAndPan(output), 100);
+        fullscreenBtn.addEventListener('click', (e) => {
+            e.preventDefault();
+            toggleFullscreen();
         });
     }
+
+    document.addEventListener('fullscreenchange', () => {
+        if (!document.fullscreenElement && graphSection.classList.contains('is-fullscreen')) {
+            graphSection.classList.remove('is-fullscreen');
+        } else if (document.fullscreenElement === graphSection) {
+            graphSection.classList.add('is-fullscreen');
+        }
+        updateFullscreenUI();
+    });
+
+    window.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape' && graphSection.classList.contains('is-fullscreen')) {
+            if (document.fullscreenElement) {
+                document.exitFullscreen().catch(() => {});
+            }
+            graphSection.classList.remove('is-fullscreen');
+            updateFullscreenUI();
+        }
+    });
 
     // Refresh button
     document.getElementById('graph-refresh-btn')?.addEventListener('click', () => {
