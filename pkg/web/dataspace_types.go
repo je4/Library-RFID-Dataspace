@@ -164,6 +164,16 @@ type InkCategoryReport struct {
 	URL string `json:"url"`
 }
 
+// InkCategoryGroup represents a group of InK categories sharing a common hierarchical prefix.
+type InkCategoryGroup struct {
+	// Prefix is the parent path label without root (e.g. "Konvolute" or "Kunst › Video").
+	Prefix string `json:"prefix,omitempty"`
+	// PrefixURL is the deep link to the parent prefix search in Mediathek InK.
+	PrefixURL string `json:"prefixUrl,omitempty"`
+	// Items lists the specific category entries within this prefix group.
+	Items []InkCategoryReport `json:"items"`
+}
+
 // InkItemReport represents a formatted InK repository item for the report dossier.
 type InkItemReport struct {
 	// Signature is the unique archive signature (e.g. "zotero2-2068924.UHBBY3JP").
@@ -180,6 +190,8 @@ type InkItemReport struct {
 	CollectionURL string `json:"collectionUrl,omitempty"`
 	// Categories lists the InK archive categories with deep links.
 	Categories []InkCategoryReport `json:"categories,omitempty"`
+	// CategoryGroups groups categories by common hierarchical prefixes to avoid duplicate labels.
+	CategoryGroups []InkCategoryGroup `json:"categoryGroups,omitempty"`
 	// Publisher is the issuing institute, publisher, or degree programme.
 	Publisher string `json:"publisher,omitempty"`
 	// Abstract contains a brief summary of the asset content.

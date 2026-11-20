@@ -214,6 +214,57 @@ func extractInkCategories(rawCategories []string) []InkCategoryReport {
 	return result
 }
 
+// extractInkCategoryGroups groups InK categories by common hierarchical parent prefixes
+// so duplicate prefixes are avoided and leaf categories are cleanly organized under their parents.
+func extractInkCategoryGroups(rawCategories []string) []InkCategoryGroup {
+	categories := extractInkCategories(rawCategories)
+	if len(categories) == 0 {
+		return nil
+	}
+
+	var groups []InkCategoryGroup
+	groupIndex := make(map[string]int)
+
+	for _, c := range categories {
+		parts := strings.Split(c.Raw, "!!")
+		if len(parts) <= 1 {
+			continue
+		}
+
+		var prefix, prefixURL, leafLabel string
+		if len(parts) == 2 {
+			prefix = ""
+			prefixURL = ""
+			leafLabel = parts[1]
+		} else {
+			prefixParts := parts[1 : len(parts)-1]
+			prefix = strings.Join(prefixParts, " › ")
+			rawPrefix := strings.Join(parts[0:len(parts)-1], "!!")
+			prefixURL = buildInkCategoryURL(rawPrefix)
+			leafLabel = parts[len(parts)-1]
+		}
+
+		item := InkCategoryReport{
+			Raw:   c.Raw,
+			Label: leafLabel,
+			URL:   c.URL,
+		}
+
+		if idx, exists := groupIndex[prefix]; exists {
+			groups[idx].Items = append(groups[idx].Items, item)
+		} else {
+			groupIndex[prefix] = len(groups)
+			groups = append(groups, InkCategoryGroup{
+				Prefix:    prefix,
+				PrefixURL: prefixURL,
+				Items:     []InkCategoryReport{item},
+			})
+		}
+	}
+
+	return groups
+}
+
 // buildOpenAlexCategoryURL builds a direct URL for OpenAlex taxonomy and category concepts
 // (e.g. types, subfields, fields, domains, source-types, institution-types, indexes).
 func buildOpenAlexCategoryURL(category, rawValue string) string {

@@ -248,17 +248,46 @@ func TestDataspaceService_URLHelpers(t *testing.T) {
 		"zotero2",
 		"zotero2!!Konvolute",
 		"zotero2!!Konvolute!!Feministisches Improvisatorium",
+		"zotero2!!Konvolute!!Frauenbefreiungsbewegung",
 		"zotero2!!Videonetzwerke!!Videogenossenschaft",
+		"iid-Arbeit!!Diplom",
 	}
 	extracted := extractInkCategories(rawCats)
-	if len(extracted) != 2 {
-		t.Fatalf("expected 2 extracted categories, got %d", len(extracted))
+	if len(extracted) != 4 {
+		t.Fatalf("expected 4 extracted categories, got %d", len(extracted))
 	}
 	if extracted[0].Label != "Konvolute › Feministisches Improvisatorium" {
 		t.Errorf("expected 'Konvolute › Feministisches Improvisatorium', got %s", extracted[0].Label)
 	}
-	if extracted[1].Label != "Videonetzwerke › Videogenossenschaft" {
-		t.Errorf("expected 'Videonetzwerke › Videogenossenschaft', got %s", extracted[1].Label)
+	if extracted[1].Label != "Konvolute › Frauenbefreiungsbewegung" {
+		t.Errorf("expected 'Konvolute › Frauenbefreiungsbewegung', got %s", extracted[1].Label)
+	}
+	if extracted[2].Label != "Videonetzwerke › Videogenossenschaft" {
+		t.Errorf("expected 'Videonetzwerke › Videogenossenschaft', got %s", extracted[2].Label)
+	}
+	if extracted[3].Label != "Diplom" {
+		t.Errorf("expected 'Diplom', got %s", extracted[3].Label)
+	}
+
+	// extractInkCategoryGroups (groups by common prefix)
+	groups := extractInkCategoryGroups(rawCats)
+	if len(groups) != 3 {
+		t.Fatalf("expected 3 category groups, got %d", len(groups))
+	}
+	if groups[0].Prefix != "Konvolute" || len(groups[0].Items) != 2 {
+		t.Errorf("expected Konvolute group with 2 items, got prefix '%s' and %d items", groups[0].Prefix, len(groups[0].Items))
+	}
+	if groups[0].Items[0].Label != "Feministisches Improvisatorium" || groups[0].Items[1].Label != "Frauenbefreiungsbewegung" {
+		t.Errorf("unexpected leaf labels in Konvolute group: %s, %s", groups[0].Items[0].Label, groups[0].Items[1].Label)
+	}
+	if groups[0].PrefixURL != "https://mediathek.hgk.fhnw.ch/ink/grid/de?search=category:%22zotero2!!Konvolute%22" {
+		t.Errorf("unexpected prefix URL: %s", groups[0].PrefixURL)
+	}
+	if groups[1].Prefix != "Videonetzwerke" || len(groups[1].Items) != 1 || groups[1].Items[0].Label != "Videogenossenschaft" {
+		t.Errorf("unexpected Videonetzwerke group: %+v", groups[1])
+	}
+	if groups[2].Prefix != "" || len(groups[2].Items) != 1 || groups[2].Items[0].Label != "Diplom" {
+		t.Errorf("unexpected root level group: %+v", groups[2])
 	}
 
 	// InK Tag URLs
@@ -621,6 +650,13 @@ func TestDataspaceService_Report(t *testing.T) {
 	}
 	if cat0.URL != "https://mediathek.hgk.fhnw.ch/ink/grid/de?search=category:%22zotero2!!Videonetzwerke!!Videogenossenschaft%22" {
 		t.Errorf("expected category deep link, got %s", cat0.URL)
+	}
+	if len(it0.InkItems[0].CategoryGroups) != 1 {
+		t.Fatalf("expected 1 InK category group, got %d", len(it0.InkItems[0].CategoryGroups))
+	}
+	grp0 := it0.InkItems[0].CategoryGroups[0]
+	if grp0.Prefix != "Videonetzwerke" || len(grp0.Items) != 1 || grp0.Items[0].Label != "Videogenossenschaft" {
+		t.Errorf("unexpected category group 0: %+v", grp0)
 	}
 	if len(it0.OpenAlexWorks) != 1 || it0.OpenAlexWorks[0].DisplayName != "Heinrich Hertz und die elektromagnetischen Wellen" {
 		t.Errorf("expected OpenAlex work attached to item 0")

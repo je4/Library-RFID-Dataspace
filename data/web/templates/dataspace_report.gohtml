@@ -269,7 +269,30 @@
                             {{if .CollectionTitle}}<span class="dataspace-meta-item"><strong>{{tr "dataspace.reportCollection"}}</strong> {{if .CollectionURL}}<a href="{{.CollectionURL}}" target="_blank" rel="noopener noreferrer" class="hover:text-primary hover:underline transition-colors">{{.CollectionTitle}}</a>{{else}}{{.CollectionTitle}}{{end}}</span>{{end}}
                             {{if .Date}}<span class="dataspace-meta-item"><strong>{{tr "dataspace.reportDate"}}</strong> {{.Date}}</span>{{end}}
                         </div>
-                        {{if .Categories}}
+                        {{if .CategoryGroups}}
+                        <div class="dataspace-ink-categories flex flex-col gap-1 mt-2 text-[11px]">
+                            {{range .CategoryGroups}}
+                            <div class="flex flex-wrap items-center gap-1.5">
+                                {{if .Prefix}}
+                                    {{if .PrefixURL}}
+                                    <a href="{{.PrefixURL}}" target="_blank" rel="noopener noreferrer" class="font-semibold text-base-content/80 hover:text-primary hover:underline transition-colors">
+                                        {{.Prefix}}:
+                                    </a>
+                                    {{else}}
+                                    <span class="font-semibold text-base-content/80">{{.Prefix}}:</span>
+                                    {{end}}
+                                {{else}}
+                                    <span class="font-semibold text-base-content/70">{{tr "dataspace.reportCategory"}}</span>
+                                {{end}}
+                                {{range .Items}}
+                                <a href="{{.URL}}" target="_blank" rel="noopener noreferrer" class="badge badge-xs badge-outline badge-secondary hover:badge-primary transition-colors text-[10px]">
+                                    {{.Label}}
+                                </a>
+                                {{end}}
+                            </div>
+                            {{end}}
+                        </div>
+                        {{else if .Categories}}
                         <div class="flex flex-wrap items-center gap-1.5 mt-2">
                             <span class="text-[11px] font-semibold text-base-content/70">{{tr "dataspace.reportCategory"}}</span>
                             {{range .Categories}}
