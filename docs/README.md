@@ -36,3 +36,8 @@ flowchart LR
   * Visual language, node shapes, semantic color schemes (`#db2777` for InK), and subgraph layouts.
   * Complete, valid Mermaid graph examples for single-item scans and multi-item co-presence scans across Alma, InK, and OpenAlex.
   * Frontend integration guidelines with DaisyUI and `mermaid.js`.
+
+* [Database Queries & Execution Flow](./database-queries.md)
+  * Detailed specification of Elasticsearch queries across `fhnw_alma-full`, `fhnw_ink`, and `openalex-works`.
+  * In-memory caching architecture with Otter, context timeouts, retry strategies, and ACL filtering (`acl.meta = "global/guest"`).
+  * Multi-item co-occurrence analysis and sequence flowcharts in Mermaid.
