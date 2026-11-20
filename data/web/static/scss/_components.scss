@@ -147,3 +147,215 @@
         display: block;
     }
 }
+
+// ==========================================================================
+// Dataspace Report & Print Styles
+// ==========================================================================
+
+#dataspace-report-pane {
+    scrollbar-width: thin;
+
+    &::-webkit-scrollbar {
+        width: 6px;
+    }
+    &::-webkit-scrollbar-thumb {
+        background-color: color-mix(in oklab, var(--color-base-content) 20%, transparent);
+        border-radius: 9999px;
+    }
+}
+
+.dataspace-item-card {
+    transition: border-color 0.15s ease-in-out, box-shadow 0.15s ease-in-out;
+
+    &:hover {
+        border-color: color-mix(in oklab, var(--color-primary) 35%, var(--color-base-300));
+        box-shadow: 0 4px 12px -2px rgba(0, 0, 0, 0.05);
+    }
+}
+
+@media print {
+    *,
+    *::before,
+    *::after {
+        box-shadow: none !important;
+        text-shadow: none !important;
+    }
+
+    html,
+    body {
+        background: #ffffff !important;
+        color: #111827 !important;
+        padding: 0 !important;
+        margin: 0 !important;
+        font-size: 10pt !important;
+    }
+
+    header,
+    footer,
+    nav,
+    section:not(#dataspace-graph-section),
+    .dataspace-graph-header,
+    #graph-toolbar-controls,
+    #report-toolbar-controls,
+    #dataspace-graph-pane,
+    dialog,
+    .breadcrumbs,
+    .toast,
+    .alert,
+    .print\:hidden {
+        display: none !important;
+    }
+
+    main {
+        max-width: 100% !important;
+        padding: 0 !important;
+        margin: 0 !important;
+    }
+
+    #dataspace-graph-section {
+        border: none !important;
+        box-shadow: none !important;
+        margin: 0 !important;
+        padding: 0 !important;
+        background: transparent !important;
+        min-height: auto !important;
+        display: block !important;
+    }
+
+    #dataspace-report-pane {
+        display: block !important;
+        overflow: visible !important;
+        height: auto !important;
+        max-height: none !important;
+        background: transparent !important;
+    }
+
+    #dataspace-report-output {
+        display: flex !important;
+        flex-direction: column !important;
+        padding: 0 !important;
+        gap: 0.75rem !important;
+    }
+
+    .dataspace-report-header {
+        break-inside: avoid !important;
+        page-break-inside: avoid !important;
+        break-after: avoid !important;
+        page-break-after: avoid !important;
+        padding-bottom: 0.4rem !important;
+        border-bottom: 1px solid #d1d5db !important;
+
+        h1 {
+            font-size: 15pt !important;
+            margin-top: 0.2rem !important;
+            margin-bottom: 0.2rem !important;
+            line-height: 1.2 !important;
+        }
+
+        p {
+            font-size: 9pt !important;
+            color: #4b5563 !important;
+        }
+    }
+
+    .dataspace-report-metrics {
+        display: grid !important;
+        grid-template-columns: repeat(6, 1fr) !important;
+        gap: 0.35rem !important;
+        page-break-inside: avoid !important;
+        break-inside: avoid !important;
+        break-after: avoid !important;
+        page-break-after: avoid !important;
+    }
+
+    .metric-card {
+        border: 1px solid #e5e7eb !important;
+        background-color: #f9fafb !important;
+        padding: 0.35rem 0.5rem !important;
+        border-radius: 6px !important;
+
+        span.text-2xl {
+            font-size: 1.25rem !important;
+            line-height: 1.2 !important;
+        }
+    }
+
+    .dataspace-summary-chips {
+        padding: 0.5rem 0.75rem !important;
+        border-radius: 8px !important;
+        border: 1px solid #e5e7eb !important;
+        background-color: #f9fafb !important;
+        page-break-inside: avoid !important;
+        break-inside: avoid !important;
+        break-after: avoid !important;
+        page-break-after: avoid !important;
+    }
+
+    .dataspace-shared-connections {
+        padding: 0.5rem 0.75rem !important;
+        border-radius: 8px !important;
+        border: 1px solid #e5e7eb !important;
+        background-color: #f9fafb !important;
+        page-break-inside: avoid !important;
+        break-inside: avoid !important;
+    }
+
+    .dataspace-report-items {
+        display: flex !important;
+        flex-direction: column !important;
+        gap: 0.75rem !important;
+        margin-top: 0.25rem !important;
+
+        > h2 {
+            font-size: 11pt !important;
+            padding-bottom: 0.25rem !important;
+            margin-bottom: 0.25rem !important;
+            border-bottom: 1px solid #e5e7eb !important;
+            break-after: avoid !important;
+            page-break-after: avoid !important;
+        }
+    }
+
+    .dataspace-item-card {
+        border: 1px solid #d1d5db !important;
+        box-shadow: none !important;
+        break-inside: auto !important;
+        page-break-inside: auto !important;
+        margin-bottom: 0.75rem !important;
+        border-radius: 8px !important;
+        background: #ffffff !important;
+    }
+
+    .dataspace-item-card-header,
+    .dataspace-item-main,
+    .dataspace-item-authors,
+    .dataspace-item-subjects {
+        break-inside: avoid !important;
+        page-break-inside: avoid !important;
+    }
+
+    .dataspace-ink-entry,
+    .dataspace-openalex-entry {
+        break-inside: avoid !important;
+        page-break-inside: avoid !important;
+        margin-bottom: 0.35rem !important;
+    }
+
+    h1, h2, h3, h4 {
+        break-after: avoid !important;
+        page-break-after: avoid !important;
+    }
+
+    .badge {
+        border: 1px solid #d1d5db !important;
+        color: #1f2937 !important;
+        background-color: #f3f4f6 !important;
+        -webkit-print-color-adjust: exact !important;
+        print-color-adjust: exact !important;
+    }
+
+    a {
+        text-decoration: none !important;
+        color: inherit !important;
+    }
+}

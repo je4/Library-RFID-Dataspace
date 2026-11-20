@@ -3,6 +3,9 @@
  * Connects physical RFID/NFC tag scans to Alma records and OpenAlex scholarly graph.
  */
 
+import { initDataspaceReport, fetchAndRenderReport } from './dataspace-report.js';
+
+let currentActiveTab = 'graph';
 let currentDirection = 'TD';
 let currentZoom = 1.0;
 let panX = 0;
@@ -543,12 +546,62 @@ export function initDataspaceGraph() {
         });
     }
 
+    // Tab Switching Handlers
+    const tabBtnGraph = document.getElementById('tab-btn-graph');
+    const tabBtnReport = document.getElementById('tab-btn-report');
+    const graphToolbar = document.getElementById('graph-toolbar-controls');
+    const reportToolbar = document.getElementById('report-toolbar-controls');
+    const graphPane = document.getElementById('dataspace-graph-pane');
+    const reportPane = document.getElementById('dataspace-report-pane');
+    const subtitleEl = document.getElementById('dataspace-view-subtitle');
+
+    const switchTab = (tab) => {
+        currentActiveTab = tab;
+        if (tab === 'graph') {
+            if (tabBtnGraph) tabBtnGraph.classList.add('tab-active');
+            if (tabBtnReport) tabBtnReport.classList.remove('tab-active');
+            if (graphToolbar) graphToolbar.classList.remove('hidden');
+            if (reportToolbar) reportToolbar.classList.add('hidden');
+            if (graphPane) graphPane.classList.remove('hidden');
+            if (reportPane) reportPane.classList.add('hidden');
+            updateTransform(output);
+        } else {
+            if (tabBtnReport) tabBtnReport.classList.add('tab-active');
+            if (tabBtnGraph) tabBtnGraph.classList.remove('tab-active');
+            if (reportToolbar) reportToolbar.classList.remove('hidden');
+            if (graphToolbar) graphToolbar.classList.add('hidden');
+            if (reportPane) reportPane.classList.remove('hidden');
+            if (graphPane) graphPane.classList.add('hidden');
+            fetchAndRenderReport(false);
+        }
+    };
+
+    if (tabBtnGraph) {
+        tabBtnGraph.addEventListener('click', (e) => {
+            e.preventDefault();
+            switchTab('graph');
+        });
+    }
+
+    if (tabBtnReport) {
+        tabBtnReport.addEventListener('click', (e) => {
+            e.preventDefault();
+            switchTab('report');
+        });
+    }
+
+    // Initialize report module
+    initDataspaceReport();
+
     updateActionButtonsState();
 
     // Theme changes re-render
     const observer = new MutationObserver(() => {
         initMermaidConfig();
         fetchAndRenderGraph(true, true);
+        if (currentActiveTab === 'report') {
+            fetchAndRenderReport(true);
+        }
     });
     observer.observe(document.documentElement, {
         attributes: true,
@@ -560,10 +613,12 @@ export function initDataspaceGraph() {
     if (loanBody) {
         const tableObserver = new MutationObserver(() => {
             fetchAndRenderGraph(false, false);
+            fetchAndRenderReport(false);
         });
         tableObserver.observe(loanBody, { childList: true, subtree: true });
     }
 
     // Initial render
     fetchAndRenderGraph(true, true);
+    fetchAndRenderReport(true);
 }

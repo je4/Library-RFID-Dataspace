@@ -394,3 +394,197 @@ func TestDataspaceEndpoint(t *testing.T) {
 		t.Errorf("expected Test Book in response, got %s", body)
 	}
 }
+
+func TestDataspaceService_Report(t *testing.T) {
+	mockSearch := func(_ context.Context, barcode string) ([]catalog.Book, error) {
+		switch barcode {
+		case "BC-01":
+			return []catalog.Book{
+				{
+					ID: "oai:alma.41SLSP_FNW:990049881560205518",
+					Titles: []catalog.Title{
+						{Title: "Heinrich Hertz: Erinnerungen, Briefe, Tagebücher", SubTitle: "Dokumente und Briefwechsel"},
+					},
+					Responsibility: []catalog.Note{
+						{Main: "Hrsg. von Albrecht Fölsing"},
+					},
+					ISBNs: []catalog.ISBN{
+						{Enriched: "978-3-8171-3420-1"},
+					},
+					Publications: []catalog.Publication{
+						{Publisher: []string{"Harri Deutsch"}, DateString: "1997"},
+					},
+					PersonalNames: []map[string]catalog.Name{
+						{"aut": {NamePart: "Fölsing, Albrecht", Identifier: "(DE-588)118772295"}},
+					},
+					Holdings: []catalog.Holding{
+						{CallNumber: "530.092 HER", Library: "FHNW Campus Muttenz"},
+					},
+					Subjects: catalog.Subject{
+						Topic: []map[string]catalog.SubjectTerm{
+							{"top": {Label: "Electromagnetism", Identifier: "(DE-588)4002851-3"}},
+						},
+					},
+				},
+			}, nil
+		case "BC-02":
+			return []catalog.Book{
+				{
+					ID: "oai:alma.41SLSP_FNW:990049881560205519",
+					Titles: []catalog.Title{
+						{Title: "Albert Einstein: Biographie"},
+					},
+					PersonalNames: []map[string]catalog.Name{
+						{"aut": {NamePart: "Fölsing, Albrecht", Identifier: "(DE-588)118772295"}},
+					},
+					Subjects: catalog.Subject{
+						Topic: []map[string]catalog.SubjectTerm{
+							{"top": {Label: "Physics", Identifier: "(DE-588)4045956-1"}},
+						},
+					},
+				},
+			}, nil
+		default:
+			return nil, nil
+		}
+	}
+
+	mockInk := func(_ context.Context, barcode string, authors []string, title string, isbns []string) ([]InkItem, error) {
+		if barcode == "BC-01" {
+			return []InkItem{
+				{
+					Signature:       "zotero2-2068924.UHBBY3JP",
+					Title:           "Classic Design – Future Design Classics",
+					Type:            "thesis",
+					CollectionTitle: "Archiv Institut Industrial Design",
+					Date:            "2021",
+				},
+			}, nil
+		}
+		return nil, nil
+	}
+
+	mockOpenAlex := func(_ context.Context, isbns []string, title string, authors []string, dois []string) ([]OpenAlexWork, error) {
+		if len(isbns) > 0 && isbns[0] == "978-3-8171-3420-1" {
+			return []OpenAlexWork{
+				{
+					ID:              "https://openalex.org/W642892681",
+					DisplayName:     "Heinrich Hertz und die elektromagnetischen Wellen",
+					PublicationYear: 1997,
+					Type:            "article",
+					Authorships: []OpenAlexAuthorship{
+						{
+							Author: OpenAlexAuthorRef{
+								ID:          "https://openalex.org/A5090064378",
+								DisplayName: "Albrecht Fölsing",
+							},
+							Institutions: []OpenAlexInstitutionRef{
+								{
+									ID:          "https://openalex.org/I118019719",
+									DisplayName: "University of Hamburg",
+								},
+							},
+						},
+					},
+					PrimaryTopic: &OpenAlexTopicRef{
+						ID:          "https://openalex.org/T10123",
+						DisplayName: "Electromagnetic Theory",
+						Subfield: &OpenAlexTaxonomyRef{
+							ID:          "https://openalex.org/subfields/3104",
+							DisplayName: "Condensed Matter Physics",
+						},
+						Field: &OpenAlexTaxonomyRef{
+							ID:          "https://openalex.org/fields/31",
+							DisplayName: "Physics and Astronomy",
+						},
+						Domain: &OpenAlexTaxonomyRef{
+							ID:          "https://openalex.org/domains/3",
+							DisplayName: "Physical Sciences",
+						},
+					},
+				},
+			}, nil
+		}
+		return nil, nil
+	}
+
+	svc := newDataspaceService(mockSearch, mockInk, mockOpenAlex)
+	report, err := svc.GenerateReport(context.Background(), []string{"BC-01", "BC-02"})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if report.ItemCount != 2 {
+		t.Errorf("expected 2 items, got %d", report.ItemCount)
+	}
+	if report.Summary.CatalogHits != 2 {
+		t.Errorf("expected 2 catalog hits, got %d", report.Summary.CatalogHits)
+	}
+	if report.Summary.InkHits != 1 {
+		t.Errorf("expected 1 InK hit, got %d", report.Summary.InkHits)
+	}
+	if report.Summary.OpenAlexHits != 1 {
+		t.Errorf("expected 1 OpenAlex hit, got %d", report.Summary.OpenAlexHits)
+	}
+	if len(report.SharedLinks) == 0 {
+		t.Errorf("expected shared links between BC-01 and BC-02 for shared author Fölsing")
+	}
+
+	// Verify item 0 details
+	it0 := report.Items[0]
+	if it0.Barcode != "BC-01" {
+		t.Errorf("expected BC-01, got %s", it0.Barcode)
+	}
+	if it0.Title != "Heinrich Hertz: Erinnerungen, Briefe, Tagebücher" {
+		t.Errorf("unexpected title: %s", it0.Title)
+	}
+	if it0.Subtitle != "Dokumente und Briefwechsel" {
+		t.Errorf("unexpected subtitle: %s", it0.Subtitle)
+	}
+	if it0.Responsibility != "Hrsg. von Albrecht Fölsing" {
+		t.Errorf("unexpected responsibility: %s", it0.Responsibility)
+	}
+	if it0.CallNumber != "530.092 HER" {
+		t.Errorf("unexpected call number: %s", it0.CallNumber)
+	}
+	if len(it0.InkItems) != 1 || it0.InkItems[0].Signature != "zotero2-2068924.UHBBY3JP" {
+		t.Errorf("expected InK item attached to item 0")
+	}
+	if len(it0.OpenAlexWorks) != 1 || it0.OpenAlexWorks[0].DisplayName != "Heinrich Hertz und die elektromagnetischen Wellen" {
+		t.Errorf("expected OpenAlex work attached to item 0")
+	}
+}
+
+func TestDataspaceReportEndpoint(t *testing.T) {
+	ctrl, err := NewController(Config{
+		Hub:      desk.NewHub(10),
+		Channels: []string{"mediathek01"},
+		CatalogSearch: func(_ context.Context, barcode string) ([]catalog.Book, error) {
+			return []catalog.Book{
+				{
+					Titles: []catalog.Title{{Title: "Test Report Book"}},
+					ISBNs:  []catalog.ISBN{{Enriched: "978-0-123456-47-2"}},
+				},
+			}, nil
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Request /dataspace/report
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/dataspace/report?barcodes=123", nil)
+	ctrl.router.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected status 200, got %d", rec.Code)
+	}
+	body := rec.Body.String()
+	if !strings.Contains(body, "Test Report Book") {
+		t.Errorf("expected Test Report Book in response, got %s", body)
+	}
+	if !strings.Contains(body, "978-0-123456-47-2") {
+		t.Errorf("expected ISBN in response, got %s", body)
+	}
+}
