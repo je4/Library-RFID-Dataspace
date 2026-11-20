@@ -74,11 +74,58 @@ function resetZoomAndPan(container) {
     if (resetBtn) resetBtn.textContent = '100%';
 }
 
-function updateCopyButtonState() {
+function updateActionButtonsState() {
+    const output = document.getElementById('dataspace-mermaid-output');
+    const hasSvg = !!output?.querySelector('svg');
+    const hasMermaid = !!lastMermaid && lastMermaid.trim().length > 0;
+
     const copyBtn = document.getElementById('graph-copy-btn');
     if (copyBtn) {
-        copyBtn.disabled = !lastMermaid || lastMermaid.trim().length === 0;
+        copyBtn.disabled = !hasMermaid;
     }
+
+    const svgBtn = document.getElementById('graph-svg-btn');
+    if (svgBtn) {
+        svgBtn.disabled = !hasSvg;
+    }
+}
+
+function downloadGraphSvg() {
+    const output = document.getElementById('dataspace-mermaid-output');
+    if (!output) return;
+    const svg = output.querySelector('svg');
+    if (!svg) return;
+
+    // Clone SVG to strip pan/zoom transforms and interactive cursors for clean standalone vector file
+    const clonedSvg = svg.cloneNode(true);
+    clonedSvg.removeAttribute('style');
+    clonedSvg.classList.remove('select-none');
+
+    // Ensure standard XML and xlink namespaces
+    if (!clonedSvg.getAttribute('xmlns')) {
+        clonedSvg.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
+    }
+    if (!clonedSvg.getAttribute('xmlns:xlink')) {
+        clonedSvg.setAttribute('xmlns:xlink', 'http://www.w3.org/1999/xlink');
+    }
+
+    const svgData = new XMLSerializer().serializeToString(clonedSvg);
+    const svgBlob = new Blob([
+        '<?xml version="1.0" encoding="UTF-8"?>\n',
+        svgData
+    ], { type: 'image/svg+xml;charset=utf-8' });
+
+    const blobUrl = URL.createObjectURL(svgBlob);
+    const downloadLink = document.createElement('a');
+    downloadLink.href = blobUrl;
+
+    const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+    downloadLink.download = `dataspace-knowledge-graph-${timestamp}.svg`;
+
+    document.body.appendChild(downloadLink);
+    downloadLink.click();
+    document.body.removeChild(downloadLink);
+    setTimeout(() => URL.revokeObjectURL(blobUrl), 200);
 }
 
 async function copyToClipboard(text) {
@@ -126,7 +173,7 @@ export async function fetchAndRenderGraph(immediate = false, force = false) {
 
         if (barcodes.length === 0) {
             lastMermaid = '';
-            updateCopyButtonState();
+            updateActionButtonsState();
             if (lastBarcodesKey === '' && !force) {
                 return;
             }
@@ -196,7 +243,7 @@ export async function fetchAndRenderGraph(immediate = false, force = false) {
             lastBarcodesKey = barcodesKey;
             lastRenderedDirection = currentDirection;
             lastMermaid = data.mermaid;
-            updateCopyButtonState();
+            updateActionButtonsState();
 
             // Preserve current zoom level and pan on reload/updates; only reset if starting from empty state
             if (wasEmpty) {
@@ -214,7 +261,7 @@ export async function fetchAndRenderGraph(immediate = false, force = false) {
         } catch (err) {
             console.warn('[Dataspace Graph] Render warning:', err);
             lastMermaid = '';
-            updateCopyButtonState();
+            updateActionButtonsState();
             if (renderId === currentRenderId) {
                 output.innerHTML = `<div class="alert alert-warning text-xs max-w-lg shadow-sm">
                     <span>${err.message || 'Graph visualizer unavailable'}</span>
@@ -439,7 +486,39 @@ export function initDataspaceGraph() {
         });
     }
 
-    updateCopyButtonState();
+    // Save SVG Button
+    const svgBtn = document.getElementById('graph-svg-btn');
+    const svgIcon = document.getElementById('graph-svg-icon');
+    const svgSavedIcon = document.getElementById('graph-svg-saved-icon');
+    const svgText = document.getElementById('graph-svg-text');
+    let svgTimeout = null;
+
+    if (svgBtn) {
+        svgBtn.addEventListener('click', (e) => {
+            e.preventDefault();
+            try {
+                downloadGraphSvg();
+                if (svgIcon) svgIcon.classList.add('hidden');
+                if (svgSavedIcon) svgSavedIcon.classList.remove('hidden');
+                const savedLabel = svgBtn.getAttribute('data-saved-text') || 'SVG gespeichert!';
+                const originalLabel = svgBtn.getAttribute('data-save-text') || 'SVG speichern';
+                if (svgText) svgText.textContent = savedLabel;
+                svgBtn.classList.add('btn-success', 'text-success-content');
+
+                if (svgTimeout) clearTimeout(svgTimeout);
+                svgTimeout = setTimeout(() => {
+                    if (svgIcon) svgIcon.classList.remove('hidden');
+                    if (svgSavedIcon) svgSavedIcon.classList.add('hidden');
+                    if (svgText) svgText.textContent = originalLabel;
+                    svgBtn.classList.remove('btn-success', 'text-success-content');
+                }, 2000);
+            } catch (err) {
+                console.error('[Dataspace Graph] SVG download failed:', err);
+            }
+        });
+    }
+
+    updateActionButtonsState();
 
     // Theme changes re-render
     const observer = new MutationObserver(() => {

@@ -110,6 +110,19 @@
                         <span id="graph-copy-text" class="hidden sm:inline">{{tr "dataspace.copyMermaid"}}</span>
                     </button>
 
+                    <!-- Save SVG Button -->
+                    <button type="button" id="graph-svg-btn" class="btn btn-xs btn-outline gap-1" title="{{tr "dataspace.saveSvgHint"}}" data-saved-text="{{tr "dataspace.savedSvg"}}" data-save-text="{{tr "dataspace.saveSvg"}}" disabled>
+                        <svg id="graph-svg-icon" class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                            <polyline points="7 10 12 15 17 10"></polyline>
+                            <line x1="12" y1="15" x2="12" y2="3"></line>
+                        </svg>
+                        <svg id="graph-svg-saved-icon" class="w-3.5 h-3.5 hidden text-success" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <polyline points="20 6 9 17 4 12"></polyline>
+                        </svg>
+                        <span id="graph-svg-text" class="hidden sm:inline">{{tr "dataspace.saveSvg"}}</span>
+                    </button>
+
                     <!-- Fullscreen Toggle -->
                     <button type="button" id="graph-fullscreen-btn" class="btn btn-xs btn-outline gap-1" title="{{tr "dataspace.fullscreen"}}" data-expand-text="{{tr "dataspace.expand"}}" data-collapse-text="{{tr "dataspace.collapse"}}">
                         <svg id="graph-fullscreen-expand-icon" class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
