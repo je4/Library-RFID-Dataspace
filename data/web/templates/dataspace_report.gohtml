@@ -104,7 +104,7 @@
 
     <!-- Shared Connections Between Items -->
     {{if .SharedLinks}}
-    <div class="dataspace-report-shared-links bg-amber-500/5 border border-amber-500/20 p-4 rounded-xl">
+    <div class="dataspace-report-shared-links bg-amber-500/5 border border-amber-500/20 p-4 sm:p-5 rounded-xl">
         <h3 class="text-sm font-bold text-amber-600 dark:text-amber-400 flex items-center gap-2 mb-3">
             <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                 <circle cx="18" cy="5" r="3"></circle>
@@ -116,15 +116,22 @@
             <span>{{tr "dataspace.reportSharedConnectionsTitle"}}</span>
             <span class="badge badge-sm badge-warning">{{len .SharedLinks}}</span>
         </h3>
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-3.5">
             {{range .SharedLinks}}
-            <div class="bg-base-100 p-3 rounded-lg border border-base-200 text-xs shadow-xs">
-                <div class="flex items-center justify-between mb-1">
-                    <span class="font-bold text-primary">{{.RelationType}}</span>
-                    <span class="text-[11px] text-base-content/50 font-mono">{{.SourceBarcode}} ↔ {{.TargetBarcode}}</span>
+            <div class="dataspace-shared-link-entry bg-base-100 p-3.5 sm:p-4 rounded-xl border border-base-200 text-xs shadow-xs flex flex-col justify-between gap-2.5">
+                <div class="flex flex-col gap-1.5">
+                    <div class="flex items-center justify-between gap-2">
+                        <span class="badge badge-sm badge-outline badge-warning font-bold text-[10px] uppercase tracking-wider">{{.RelationType}}</span>
+                    </div>
+                    <div class="font-semibold text-xs sm:text-sm text-base-content/90 leading-snug">
+                        <span>{{.SourceTitle}}</span>
+                        <span class="text-amber-500 font-bold mx-1.5">↔</span>
+                        <span>{{.TargetTitle}}</span>
+                    </div>
                 </div>
-                <div class="font-medium text-base-content/90 mb-1 line-clamp-1">{{.SourceTitle}} ↔ {{.TargetTitle}}</div>
-                <div class="text-[11px] text-base-content/70">{{.Description}}</div>
+                <div class="text-[11px] sm:text-xs text-base-content/75 bg-base-200/50 p-2.5 rounded-lg border border-base-200/60 leading-relaxed font-normal">
+                    {{.Description}}
+                </div>
             </div>
             {{end}}
         </div>
@@ -139,9 +146,9 @@
         </h2>
 
         {{range $index, $item := .Items}}
-        <div class="dataspace-item-dossier bg-base-100 border border-base-300 rounded-2xl p-5 sm:p-6 shadow-sm flex flex-col gap-5 break-inside-avoid">
+        <div class="dataspace-item-dossier bg-base-100 border border-base-300 rounded-2xl p-5 sm:p-6 shadow-sm flex flex-col gap-5">
             <!-- Header: Title, Subtitle, Barcode Badges -->
-            <div class="flex flex-col sm:flex-row sm:items-start justify-between gap-3 pb-3 border-b border-base-200">
+            <div class="dataspace-dossier-header flex flex-col sm:flex-row sm:items-start justify-between gap-3 pb-3 border-b border-base-200">
                 <div class="flex-1">
                     <div class="flex items-center gap-2 mb-1">
                         <span class="badge badge-neutral font-mono font-bold text-xs">{{$item.Barcode}}</span>
@@ -176,9 +183,8 @@
                     <span class="badge badge-outline badge-sm font-mono text-[11px]">MMSID: {{$item.MMSID}}</span>
                     {{end}}
                     {{if $item.SwisscoveryURL}}
-                    <a href="{{$item.SwisscoveryURL}}" target="_blank" rel="noopener noreferrer" class="btn btn-xs btn-outline btn-primary gap-1 mt-1 print:hidden">
+                    <a href="{{$item.SwisscoveryURL}}" target="_blank" rel="noopener noreferrer" class="btn btn-xs btn-outline btn-primary font-mono print:hidden">
                         <span>{{tr "dataspace.reportOpenSwisscovery"}}</span>
-                        <svg class="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path><polyline points="15 3 21 3 21 9"></polyline><line x1="10" y1="14" x2="21" y2="3"></line></svg>
                     </a>
                     {{end}}
                 </div>
@@ -220,7 +226,7 @@
                     <svg class="w-3.5 h-3.5 text-purple-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"></path><line x1="7" y1="7" x2="7.01" y2="7"></line></svg>
                     <span>{{tr "dataspace.reportSubjectsSection"}}</span>
                 </h4>
-                <div class="flex flex-wrap gap-1.5">
+                <div class="dataspace-subjects-chips flex flex-wrap gap-2">
                     {{range $item.Subjects}}
                     {{if .URL}}
                     <a href="{{.URL}}" target="_blank" rel="noopener noreferrer" class="badge badge-outline badge-sm hover:badge-primary text-[11px] font-normal transition-colors">
@@ -236,7 +242,7 @@
 
             <!-- Mediathek InK Digital Repository Entries -->
             {{if $item.InkItems}}
-            <div class="dataspace-section bg-pink-500/5 border border-pink-500/15 p-4 rounded-xl">
+            <div class="dataspace-section dataspace-ink-section bg-pink-500/5 border border-pink-500/15 p-4 sm:p-5 rounded-xl">
                 <h4 class="text-xs font-bold text-pink-700 dark:text-pink-400 uppercase tracking-wider mb-3 flex items-center justify-between">
                     <div class="flex items-center gap-1.5">
                         <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"></path><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"></path></svg>
@@ -244,23 +250,24 @@
                     </div>
                     <span class="badge badge-xs badge-secondary">{{len $item.InkItems}} {{tr "dataspace.reportHits"}}</span>
                 </h4>
-                <div class="flex flex-col gap-3">
+                <div class="flex flex-col gap-3.5">
                     {{range $item.InkItems}}
-                    <div class="bg-base-100 p-3 rounded-lg border border-base-200 text-xs shadow-xs">
+                    <div class="dataspace-ink-entry bg-base-100 p-3.5 rounded-lg border border-base-200 text-xs shadow-xs">
                         <div class="flex items-start justify-between gap-2">
                             <h5 class="font-bold text-base-content/90">{{.Title}}</h5>
                             {{if .DetailURL}}
-                            <a href="{{.DetailURL}}" target="_blank" rel="noopener noreferrer" class="btn btn-xs btn-ghost text-pink-600 gap-1 shrink-0 print:hidden">
-                                <span>{{tr "dataspace.reportInkDetail"}}</span>
-                                <svg class="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path><polyline points="15 3 21 3 21 9"></polyline><line x1="10" y1="14" x2="21" y2="3"></line></svg>
-                            </a>
+                            <div class="flex items-center gap-1 shrink-0 print:hidden">
+                                <a href="{{.DetailURL}}" target="_blank" rel="noopener noreferrer" class="btn btn-xs btn-outline btn-secondary font-mono">
+                                    {{tr "dataspace.reportInkDetail"}}
+                                </a>
+                            </div>
                             {{end}}
                         </div>
-                        <div class="flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-base-content/60 mt-1">
-                            {{if .Signature}}<span><strong>{{tr "dataspace.reportSignature"}}</strong> {{.Signature}}</span>{{end}}
-                            {{if .Type}}<span><strong>{{tr "dataspace.reportType"}}</strong> {{.Type}}</span>{{end}}
-                            {{if .CollectionTitle}}<span><strong>{{tr "dataspace.reportCollection"}}</strong> {{.CollectionTitle}}</span>{{end}}
-                            {{if .Date}}<span><strong>{{tr "dataspace.reportDate"}}</strong> {{.Date}}</span>{{end}}
+                        <div class="dataspace-ink-meta flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-base-content/60 mt-1">
+                            {{if .Signature}}<span class="dataspace-meta-item"><strong>{{tr "dataspace.reportSignature"}}</strong> {{.Signature}}</span>{{end}}
+                            {{if .Type}}<span class="dataspace-meta-item"><strong>{{tr "dataspace.reportType"}}</strong> {{.Type}}</span>{{end}}
+                            {{if .CollectionTitle}}<span class="dataspace-meta-item"><strong>{{tr "dataspace.reportCollection"}}</strong> {{.CollectionTitle}}</span>{{end}}
+                            {{if .Date}}<span class="dataspace-meta-item"><strong>{{tr "dataspace.reportDate"}}</strong> {{.Date}}</span>{{end}}
                         </div>
                         {{if .Abstract}}
                         <p class="text-[11px] text-base-content/70 mt-2 line-clamp-2">{{.Abstract}}</p>
@@ -287,7 +294,7 @@
 
             <!-- OpenAlex Scholarly Publications & Citations -->
             {{if $item.OpenAlexWorks}}
-            <div class="dataspace-section bg-indigo-500/5 border border-indigo-500/15 p-4 rounded-xl">
+            <div class="dataspace-section dataspace-openalex-section bg-indigo-500/5 border border-indigo-500/15 p-4 sm:p-5 rounded-xl">
                 <h4 class="text-xs font-bold text-indigo-700 dark:text-indigo-400 uppercase tracking-wider mb-3 flex items-center justify-between">
                     <div class="flex items-center gap-1.5">
                         <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"></path><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"></path></svg>
@@ -297,7 +304,7 @@
                 </h4>
                 <div class="flex flex-col gap-4">
                     {{range $item.OpenAlexWorks}}
-                    <div class="bg-base-100 p-3.5 rounded-lg border border-base-200 text-xs shadow-xs">
+                    <div class="dataspace-openalex-entry bg-base-100 p-3.5 sm:p-4 rounded-lg border border-base-200 text-xs shadow-xs">
                         <div class="flex items-start justify-between gap-2">
                             <div>
                                 <h5 class="font-bold text-base-content text-sm leading-tight">{{.DisplayName}}</h5>
@@ -357,14 +364,14 @@
                             <div class="flex items-center justify-between mb-1.5">
                                 <span class="text-[11px] font-bold text-indigo-600 dark:text-indigo-400 uppercase tracking-wider">{{tr "dataspace.reportCitingWorks"}}</span>
                                 {{if .CitedByURL}}
-                                <a href="{{.CitedByURL}}" target="_blank" rel="noopener noreferrer" class="text-[10px] text-primary hover:underline print:hidden">
+                                <a href="{{.CitedByURL}}" target="_blank" rel="noopener noreferrer" class="dataspace-citation-link text-[10px] text-primary hover:text-secondary font-medium transition-colors hover:underline print:hidden">
                                     {{tr "dataspace.reportAllCitations"}} →
                                 </a>
                                 {{end}}
                             </div>
                             <div class="space-y-1.5">
                                 {{range .CitingWorks}}
-                                <div class="bg-base-200/40 p-2 rounded text-[11px] flex items-start justify-between gap-2">
+                                <div class="bg-base-200/40 p-2.5 rounded-lg text-[11px] flex items-start justify-between gap-2">
                                     <div>
                                         <span class="font-medium text-base-content/90">{{.DisplayName}}</span>
                                         {{if .PublicationYear}}<span class="text-base-content/50 ml-1">({{.PublicationYear}})</span>{{end}}
@@ -379,9 +386,9 @@
                                         {{end}}
                                     </div>
                                     <div class="flex items-center gap-1 shrink-0 print:hidden">
-                                        {{if .DOIURL}}<a href="{{.DOIURL}}" target="_blank" rel="noopener noreferrer" class="badge badge-xs badge-outline font-mono">DOI</a>{{end}}
-                                        {{if .WorkURL}}<a href="{{.WorkURL}}" target="_blank" rel="noopener noreferrer" class="badge badge-xs badge-outline badge-primary font-mono">OA</a>{{end}}
-                                        {{if .AlmaSwisscoveryURL}}<a href="{{.AlmaSwisscoveryURL}}" target="_blank" rel="noopener noreferrer" class="badge badge-xs badge-outline badge-secondary">Katalog</a>{{end}}
+                                        {{if .DOIURL}}<a href="{{.DOIURL}}" target="_blank" rel="noopener noreferrer" class="btn btn-xs btn-outline btn-accent font-mono">DOI</a>{{end}}
+                                        {{if .WorkURL}}<a href="{{.WorkURL}}" target="_blank" rel="noopener noreferrer" class="btn btn-xs btn-outline btn-primary font-mono">OA</a>{{end}}
+                                        {{if .AlmaSwisscoveryURL}}<a href="{{.AlmaSwisscoveryURL}}" target="_blank" rel="noopener noreferrer" class="btn btn-xs btn-outline btn-secondary font-mono">Katalog</a>{{end}}
                                     </div>
                                 </div>
                                 {{end}}
