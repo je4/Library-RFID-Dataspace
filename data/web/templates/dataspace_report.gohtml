@@ -266,9 +266,19 @@
                         <div class="dataspace-ink-meta flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-base-content/60 mt-1">
                             {{if .Signature}}<span class="dataspace-meta-item"><strong>{{tr "dataspace.reportSignature"}}</strong> {{.Signature}}</span>{{end}}
                             {{if .Type}}<span class="dataspace-meta-item"><strong>{{tr "dataspace.reportType"}}</strong> {{.Type}}</span>{{end}}
-                            {{if .CollectionTitle}}<span class="dataspace-meta-item"><strong>{{tr "dataspace.reportCollection"}}</strong> {{.CollectionTitle}}</span>{{end}}
+                            {{if .CollectionTitle}}<span class="dataspace-meta-item"><strong>{{tr "dataspace.reportCollection"}}</strong> {{if .CollectionURL}}<a href="{{.CollectionURL}}" target="_blank" rel="noopener noreferrer" class="hover:text-primary hover:underline transition-colors">{{.CollectionTitle}}</a>{{else}}{{.CollectionTitle}}{{end}}</span>{{end}}
                             {{if .Date}}<span class="dataspace-meta-item"><strong>{{tr "dataspace.reportDate"}}</strong> {{.Date}}</span>{{end}}
                         </div>
+                        {{if .Categories}}
+                        <div class="flex flex-wrap items-center gap-1.5 mt-2">
+                            <span class="text-[11px] font-semibold text-base-content/70">{{tr "dataspace.reportCategory"}}</span>
+                            {{range .Categories}}
+                            <a href="{{.URL}}" target="_blank" rel="noopener noreferrer" class="badge badge-xs badge-outline badge-secondary hover:badge-primary transition-colors text-[10px]">
+                                {{.Label}}
+                            </a>
+                            {{end}}
+                        </div>
+                        {{end}}
                         {{if .Abstract}}
                         <p class="text-[11px] text-base-content/70 mt-2 line-clamp-2">{{.Abstract}}</p>
                         {{end}}
@@ -276,13 +286,6 @@
                         <div class="flex flex-wrap gap-1 mt-2">
                             {{range .Persons}}
                             <span class="badge badge-xs bg-base-200 text-[10px]">{{.Name}}{{if .Role}} ({{.Role}}){{end}}</span>
-                            {{end}}
-                        </div>
-                        {{end}}
-                        {{if .Tags}}
-                        <div class="flex flex-wrap gap-1 mt-1.5">
-                            {{range .Tags}}
-                            <span class="badge badge-xs badge-outline text-[10px]">{{.}}</span>
                             {{end}}
                         </div>
                         {{end}}

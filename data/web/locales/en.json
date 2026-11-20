@@ -304,6 +304,7 @@
   "dataspace.reportSignature": "Call Number:",
   "dataspace.reportType": "Type:",
   "dataspace.reportCollection": "Collection:",
+  "dataspace.reportCategory": "Category:",
   "dataspace.reportDate": "Date:",
   "dataspace.reportOpenAlexSection": "Scholarly OpenAlex Publications",
   "dataspace.reportCitationsInOpenAlex": "citations in OpenAlex",

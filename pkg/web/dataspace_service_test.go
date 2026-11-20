@@ -62,6 +62,7 @@ func TestDataspaceService_SingleBook(t *testing.T) {
 				Title:           "Classic Design – Future Design Classics",
 				Type:            "thesis",
 				CollectionTitle: "Archiv Institut Industrial Design",
+				Category:        []string{"zotero2!!Designgeschichte!!Klassiker"},
 				Persons: []InkPerson{
 					{Name: "Fölsing, Albrecht", Role: "creator"},
 				},
@@ -102,11 +103,17 @@ func TestDataspaceService_SingleBook(t *testing.T) {
 	if !strings.Contains(resp.Mermaid, "Classic Design") {
 		t.Errorf("expected InK title in Mermaid")
 	}
-	if !strings.Contains(resp.Mermaid, "Archiv Institut Industrial Design") {
-		t.Errorf("expected InK collection in Mermaid")
+	if !strings.Contains(resp.Mermaid, "Bestand: Archiv Institut Industrial Design") {
+		t.Errorf("expected InK estate in Mermaid")
 	}
-	if !strings.Contains(resp.Mermaid, "mediathek.hgk.fhnw.ch/ink/de") {
-		t.Errorf("expected InK portal url in Mermaid")
+	if !strings.Contains(resp.Mermaid, "https://mediathek.hgk.fhnw.ch/ink/grid/de?searchtype=estate&search=Archiv+Institut+Industrial+Design") {
+		t.Errorf("expected InK estate deep link in Mermaid")
+	}
+	if !strings.Contains(resp.Mermaid, "Kategorie: Designgeschichte › Klassiker") {
+		t.Errorf("expected InK category in Mermaid")
+	}
+	if !strings.Contains(resp.Mermaid, "https://mediathek.hgk.fhnw.ch/ink/grid/de?search=category:%22zotero2!!Designgeschichte!!Klassiker%22") {
+		t.Errorf("expected InK category deep link in Mermaid")
 	}
 	if !strings.Contains(resp.Mermaid, "Fölsing, Albrecht") {
 		t.Errorf("expected author name in Mermaid")
@@ -208,6 +215,60 @@ func TestDataspaceService_URLHelpers(t *testing.T) {
 	if url := buildOpenAlexSourceListURL("cwts-core"); url != "https://openalex.org/source-lists/cwts-core" {
 		t.Errorf("expected https://openalex.org/source-lists/cwts-core, got %s", url)
 	}
+	// InK Estate URLs
+	if url := buildInkEstateURL("Revolving Histories"); url != "https://mediathek.hgk.fhnw.ch/ink/grid/de?searchtype=estate&search=Revolving+Histories" {
+		t.Errorf("expected https://mediathek.hgk.fhnw.ch/ink/grid/de?searchtype=estate&search=Revolving+Histories, got %s", url)
+	}
+	if url := buildInkEstateURL(""); url != "https://mediathek.hgk.fhnw.ch/ink/de" {
+		t.Errorf("expected default https://mediathek.hgk.fhnw.ch/ink/de, got %s", url)
+	}
+
+	// InK Category URLs & Formatting (omits first hierarchy level)
+	if url := buildInkCategoryURL("zotero2!!Videonetzwerke!!Videogenossenschaft"); url != "https://mediathek.hgk.fhnw.ch/ink/grid/de?search=category:%22zotero2!!Videonetzwerke!!Videogenossenschaft%22" {
+		t.Errorf("expected category URL, got %s", url)
+	}
+	if url := buildInkCategoryURL(""); url != "https://mediathek.hgk.fhnw.ch/ink/de" {
+		t.Errorf("expected default https://mediathek.hgk.fhnw.ch/ink/de, got %s", url)
+	}
+	if label := formatInkCategoryLabel("zotero2!!Videonetzwerke!!Videogenossenschaft"); label != "Videonetzwerke › Videogenossenschaft" {
+		t.Errorf("expected formatted category label 'Videonetzwerke › Videogenossenschaft', got %s", label)
+	}
+	if label := formatInkCategoryLabel("iid-Arbeit!!Diplom"); label != "Diplom" {
+		t.Errorf("expected 'Diplom', got %s", label)
+	}
+	if label := formatInkCategoryLabel("PlainCategory"); label != "" {
+		t.Errorf("expected empty label for 1-level category 'PlainCategory', got %s", label)
+	}
+	if label := formatInkCategoryLabel("zotero2"); label != "" {
+		t.Errorf("expected empty label for root level 'zotero2', got %s", label)
+	}
+
+	// extractInkCategories (prunes ancestors & root levels)
+	rawCats := []string{
+		"zotero2",
+		"zotero2!!Konvolute",
+		"zotero2!!Konvolute!!Feministisches Improvisatorium",
+		"zotero2!!Videonetzwerke!!Videogenossenschaft",
+	}
+	extracted := extractInkCategories(rawCats)
+	if len(extracted) != 2 {
+		t.Fatalf("expected 2 extracted categories, got %d", len(extracted))
+	}
+	if extracted[0].Label != "Konvolute › Feministisches Improvisatorium" {
+		t.Errorf("expected 'Konvolute › Feministisches Improvisatorium', got %s", extracted[0].Label)
+	}
+	if extracted[1].Label != "Videonetzwerke › Videogenossenschaft" {
+		t.Errorf("expected 'Videonetzwerke › Videogenossenschaft', got %s", extracted[1].Label)
+	}
+
+	// InK Tag URLs
+	if url := buildInkTagURL("design"); url != "https://mediathek.hgk.fhnw.ch/ink/grid/de?search=design" {
+		t.Errorf("expected https://mediathek.hgk.fhnw.ch/ink/grid/de?search=design, got %s", url)
+	}
+	if url := buildInkTagURL(""); url != "https://mediathek.hgk.fhnw.ch/ink/de" {
+		t.Errorf("expected default https://mediathek.hgk.fhnw.ch/ink/de, got %s", url)
+	}
+
 	// OpenAlex Publishers
 	if url := buildOpenAlexPublisherURL("P4310320990", ""); url != "https://openalex.org/publishers/P4310320990" {
 		t.Errorf("expected https://openalex.org/publishers/P4310320990, got %s", url)
@@ -457,6 +518,7 @@ func TestDataspaceService_Report(t *testing.T) {
 					Title:           "Classic Design – Future Design Classics",
 					Type:            "thesis",
 					CollectionTitle: "Archiv Institut Industrial Design",
+					Category:        []string{"zotero2!!Videonetzwerke!!Videogenossenschaft"},
 					Date:            "2021",
 				},
 			}, nil
@@ -549,6 +611,16 @@ func TestDataspaceService_Report(t *testing.T) {
 	}
 	if len(it0.InkItems) != 1 || it0.InkItems[0].Signature != "zotero2-2068924.UHBBY3JP" {
 		t.Errorf("expected InK item attached to item 0")
+	}
+	if len(it0.InkItems[0].Categories) != 1 {
+		t.Fatalf("expected 1 InK category, got %d", len(it0.InkItems[0].Categories))
+	}
+	cat0 := it0.InkItems[0].Categories[0]
+	if cat0.Label != "Videonetzwerke › Videogenossenschaft" {
+		t.Errorf("expected category label 'Videonetzwerke › Videogenossenschaft', got %s", cat0.Label)
+	}
+	if cat0.URL != "https://mediathek.hgk.fhnw.ch/ink/grid/de?search=category:%22zotero2!!Videonetzwerke!!Videogenossenschaft%22" {
+		t.Errorf("expected category deep link, got %s", cat0.URL)
 	}
 	if len(it0.OpenAlexWorks) != 1 || it0.OpenAlexWorks[0].DisplayName != "Heinrich Hertz und die elektromagnetischen Wellen" {
 		t.Errorf("expected OpenAlex work attached to item 0")

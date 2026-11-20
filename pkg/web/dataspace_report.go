@@ -122,6 +122,8 @@ func (s *dataspaceService) buildReport(ctx context.Context, cleanBarcodes []stri
 				Type:            ink.Type,
 				Date:            ink.Date,
 				CollectionTitle: ink.CollectionTitle,
+				CollectionURL:   buildInkEstateURL(ink.CollectionTitle),
+				Categories:      extractInkCategories(ink.Category),
 				Publisher:       ink.Publisher,
 				Abstract:        ink.Abstract,
 				DetailURL:       buildInkDetailURL(ink.Signature, ink.URL),

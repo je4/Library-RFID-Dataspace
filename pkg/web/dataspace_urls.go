@@ -130,6 +130,90 @@ func buildInkDetailURL(signature, fallbackURL string) string {
 	return "https://mediathek.hgk.fhnw.ch/ink/de"
 }
 
+// buildInkEstateURL constructs a deep link into the Mediathek InK portal for an estate / collection.
+func buildInkEstateURL(estateName string) string {
+	if estateName != "" {
+		return fmt.Sprintf("https://mediathek.hgk.fhnw.ch/ink/grid/de?searchtype=estate&search=%s", url.QueryEscape(estateName))
+	}
+	return "https://mediathek.hgk.fhnw.ch/ink/de"
+}
+
+// buildInkCategoryURL constructs a deep link into the Mediathek InK portal for a category search.
+func buildInkCategoryURL(category string) string {
+	cleaned := strings.Trim(strings.TrimSpace(category), "\"")
+	if cleaned != "" {
+		escaped := strings.ReplaceAll(url.QueryEscape(cleaned), "%21", "!")
+		return fmt.Sprintf("https://mediathek.hgk.fhnw.ch/ink/grid/de?search=category:%%22%s%%22", escaped)
+	}
+	return "https://mediathek.hgk.fhnw.ch/ink/de"
+}
+
+// buildInkTagURL constructs a deep link into the Mediathek InK portal for a tag or keyword search.
+func buildInkTagURL(tag string) string {
+	cleaned := strings.TrimSpace(tag)
+	if cleaned != "" {
+		return fmt.Sprintf("https://mediathek.hgk.fhnw.ch/ink/grid/de?search=%s", url.QueryEscape(cleaned))
+	}
+	return "https://mediathek.hgk.fhnw.ch/ink/de"
+}
+
+// formatInkCategoryLabel formats hierarchical InK category strings (e.g. "zotero2!!Videonetzwerke!!Videogenossenschaft")
+// into a clean, human-readable display label ("Videonetzwerke › Videogenossenschaft") by omitting the first hierarchy level.
+func formatInkCategoryLabel(category string) string {
+	category = strings.TrimSpace(category)
+	if category == "" {
+		return ""
+	}
+	parts := strings.Split(category, "!!")
+	if len(parts) > 1 {
+		return strings.Join(parts[1:], " › ")
+	}
+	return ""
+}
+
+// extractInkCategories processes raw InK category strings, stripping the root hierarchy level
+// and pruning redundant parent prefix paths so only the most specific category branches are shown.
+func extractInkCategories(rawCategories []string) []InkCategoryReport {
+	if len(rawCategories) == 0 {
+		return nil
+	}
+
+	var validCats []string
+	for _, c := range rawCategories {
+		c = strings.TrimSpace(c)
+		if c == "" {
+			continue
+		}
+		parts := strings.Split(c, "!!")
+		if len(parts) > 1 {
+			validCats = append(validCats, c)
+		}
+	}
+
+	var result []InkCategoryReport
+	for _, c := range validCats {
+		isAncestor := false
+		prefix := c + "!!"
+		for _, other := range validCats {
+			if other != c && strings.HasPrefix(other, prefix) {
+				isAncestor = true
+				break
+			}
+		}
+		if !isAncestor {
+			label := formatInkCategoryLabel(c)
+			if label != "" {
+				result = append(result, InkCategoryReport{
+					Raw:   c,
+					Label: label,
+					URL:   buildInkCategoryURL(c),
+				})
+			}
+		}
+	}
+	return result
+}
+
 // buildOpenAlexCategoryURL builds a direct URL for OpenAlex taxonomy and category concepts
 // (e.g. types, subfields, fields, domains, source-types, institution-types, indexes).
 func buildOpenAlexCategoryURL(category, rawValue string) string {

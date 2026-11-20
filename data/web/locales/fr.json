@@ -304,6 +304,7 @@
   "dataspace.reportSignature": "Cote :",
   "dataspace.reportType": "Type :",
   "dataspace.reportCollection": "Collection :",
+  "dataspace.reportCategory": "Catégorie :",
   "dataspace.reportDate": "Date :",
   "dataspace.reportOpenAlexSection": "Publications scientifiques OpenAlex",
   "dataspace.reportCitationsInOpenAlex": "citations dans OpenAlex",

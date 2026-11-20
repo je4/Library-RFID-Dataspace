@@ -154,6 +154,16 @@ type DataspaceTopicEntry struct {
 	DomainURL string `json:"domainUrl,omitempty"`
 }
 
+// InkCategoryReport represents an InK archive category with label and deep link.
+type InkCategoryReport struct {
+	// Raw is the original category string (e.g. "zotero2!!Videonetzwerke!!Videogenossenschaft").
+	Raw string `json:"raw"`
+	// Label is the clean, human-readable category name.
+	Label string `json:"label"`
+	// URL is the deep link to the category grid in Mediathek InK.
+	URL string `json:"url"`
+}
+
 // InkItemReport represents a formatted InK repository item for the report dossier.
 type InkItemReport struct {
 	// Signature is the unique archive signature (e.g. "zotero2-2068924.UHBBY3JP").
@@ -166,6 +176,10 @@ type InkItemReport struct {
 	Date string `json:"date,omitempty"`
 	// CollectionTitle is the parent archive collection or repository name.
 	CollectionTitle string `json:"collectionTitle,omitempty"`
+	// CollectionURL is the deep link to the estate / holdings search in Mediathek InK.
+	CollectionURL string `json:"collectionUrl,omitempty"`
+	// Categories lists the InK archive categories with deep links.
+	Categories []InkCategoryReport `json:"categories,omitempty"`
 	// Publisher is the issuing institute, publisher, or degree programme.
 	Publisher string `json:"publisher,omitempty"`
 	// Abstract contains a brief summary of the asset content.

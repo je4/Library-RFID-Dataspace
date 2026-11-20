@@ -157,10 +157,19 @@ func (s *dataspaceService) buildGraph(ctx context.Context, cleanBarcodes []strin
 
 				if ink.CollectionTitle != "" {
 					colNodeID := "Col_" + slugify(ink.CollectionTitle)
-					colLabel := fmt.Sprintf("Collection: %s", truncateText(ink.CollectionTitle, 30))
+					colLabel := fmt.Sprintf("Bestand: %s", truncateText(ink.CollectionTitle, 30))
 					addNode(&inkNodes, colNodeID, fmt.Sprintf("        %s[\"%s\"]:::nodeInk", colNodeID, sanitizeMermaidLabel(colLabel)))
-					addClick(colNodeID, "https://mediathek.hgk.fhnw.ch/ink/de", fmt.Sprintf("InK Collection: %s", ink.CollectionTitle))
+					addClick(colNodeID, buildInkEstateURL(ink.CollectionTitle), fmt.Sprintf("InK Bestand: %s", ink.CollectionTitle))
 					addEdge(inkID, "-->", "part of", colNodeID)
+				}
+
+				categories := extractInkCategories(ink.Category)
+				for _, catRep := range categories {
+					catNodeID := "Cat_" + slugify(catRep.Raw)
+					catLabel := fmt.Sprintf("Kategorie: %s", truncateText(catRep.Label, 30))
+					addNode(&inkNodes, catNodeID, fmt.Sprintf("        %s[\"%s\"]:::nodeInk", catNodeID, sanitizeMermaidLabel(catLabel)))
+					addClick(catNodeID, catRep.URL, fmt.Sprintf("InK Kategorie: %s", catRep.Label))
+					addEdge(inkID, "-->", "category", catNodeID)
 				}
 			}
 		}
