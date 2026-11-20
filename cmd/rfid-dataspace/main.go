@@ -42,6 +42,7 @@ func main() {
 	}
 	var catalogSearch func(context.Context, string) ([]catalog.Book, error)
 	var inkSearch web.InkSearchFunc
+	var openAlexSearch web.OpenAlexSearchFunc
 	if elasticClient != nil {
 		catalogSearch = func(ctx context.Context, barcode string) ([]catalog.Book, error) {
 			return catalog.SearchByBarcode(ctx, elasticClient, conf.ElasticSearch.Index, barcode)
@@ -52,6 +53,13 @@ func main() {
 		}
 		inkSearch = func(ctx context.Context, barcode string, authors []string, title string, isbns []string) ([]web.InkItem, error) {
 			return searchInkItems(ctx, elasticClient, inkIndex, barcode, authors, title, isbns)
+		}
+		openAlexWorksIndex := conf.ElasticSearch.OpenAlexWorksIndex
+		if openAlexWorksIndex == "" {
+			openAlexWorksIndex = "openalex-works"
+		}
+		openAlexSearch = func(ctx context.Context, isbns []string, title string, authors []string, dois []string) ([]web.OpenAlexWork, error) {
+			return searchOpenAlexWorks(ctx, elasticClient, openAlexWorksIndex, isbns, title, authors, dois)
 		}
 	}
 
@@ -82,21 +90,22 @@ func main() {
 
 	// 4. Initialize Web Controller with embedded templates and assets
 	webCtrl, err := web.NewController(web.Config{
-		CatalogSearch: catalogSearch,
-		InkSearch:     inkSearch,
-		SourceRecords: conf.SourceRecords,
-		Addr:          addr,
-		ExtAddr:       extAddr,
-		ClientName:    conf.Name,
-		WSBroker:      conf.WSBroker,
-		Channels:      conf.Channels,
-		DefaultISIL:   conf.DefaultISIL,
-		DefaultAFI:    conf.DefaultAFI,
-		ThemeLight:    conf.Themes.Light,
-		ThemeDark:     conf.Themes.Dark,
-		Hub:           hub,
-		ISILList:      isilList,
-		Logger:        logger,
+		CatalogSearch:  catalogSearch,
+		InkSearch:      inkSearch,
+		OpenAlexSearch: openAlexSearch,
+		SourceRecords:  conf.SourceRecords,
+		Addr:           addr,
+		ExtAddr:        extAddr,
+		ClientName:     conf.Name,
+		WSBroker:       conf.WSBroker,
+		Channels:       conf.Channels,
+		DefaultISIL:    conf.DefaultISIL,
+		DefaultAFI:     conf.DefaultAFI,
+		ThemeLight:     conf.Themes.Light,
+		ThemeDark:      conf.Themes.Dark,
+		Hub:            hub,
+		ISILList:       isilList,
+		Logger:         logger,
 	})
 	if err != nil {
 		logger.Fatal().Err(err).Msg("cannot initialize web controller")

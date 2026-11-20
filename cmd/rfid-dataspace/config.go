@@ -16,10 +16,11 @@ type ThemeConfig struct {
 }
 
 type ElasticSearchConfig struct {
-	Endpoint []string              `toml:"endpoint"`
-	Index    string                `toml:"index"`
-	InkIndex string                `toml:"ink_index"`
-	APIKey   utilsconfig.EnvString `toml:"apikey"`
+	Endpoint           []string              `toml:"endpoint"`
+	Index              string                `toml:"index"`
+	InkIndex           string                `toml:"ink_index"`
+	OpenAlexWorksIndex string                `toml:"openalex_works_index"`
+	APIKey             utilsconfig.EnvString `toml:"apikey"`
 }
 
 // DataspaceAppConfig defines configuration parameters for the rfid-dataspace application.

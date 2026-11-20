@@ -59,6 +59,76 @@ type InkPerson struct {
 // InkSearchFunc searches the fhnw_ink index for matching digital records.
 type InkSearchFunc func(ctx context.Context, barcode string, authors []string, title string, isbns []string) ([]InkItem, error)
 
+// OpenAlexWork represents a scholarly work from openalex-works.
+type OpenAlexWork struct {
+	ID              string               `json:"id"`
+	DOI             string               `json:"doi,omitempty"`
+	Title           string               `json:"title,omitempty"`
+	DisplayName     string               `json:"display_name,omitempty"`
+	PublicationYear int                  `json:"publication_year,omitempty"`
+	Type            string               `json:"type,omitempty"`
+	Authorships     []OpenAlexAuthorship `json:"authorships,omitempty"`
+	PrimaryTopic    *OpenAlexTopicRef    `json:"primary_topic,omitempty"`
+	Topics          []OpenAlexTopicRef   `json:"topics,omitempty"`
+	PrimaryLocation *OpenAlexLocation    `json:"primary_location,omitempty"`
+	Locations       []OpenAlexLocation   `json:"locations,omitempty"`
+	ReferencedWorks []string             `json:"referenced_works,omitempty"`
+	RelatedWorks    []string             `json:"related_works,omitempty"`
+}
+
+// OpenAlexAuthorship represents an authorship structure in OpenAlex.
+type OpenAlexAuthorship struct {
+	Author       OpenAlexAuthorRef        `json:"author"`
+	Institutions []OpenAlexInstitutionRef `json:"institutions,omitempty"`
+}
+
+// OpenAlexAuthorRef represents an author entity in OpenAlex.
+type OpenAlexAuthorRef struct {
+	ID          string `json:"id"`
+	DisplayName string `json:"display_name"`
+	ORCID       string `json:"orcid,omitempty"`
+}
+
+// OpenAlexInstitutionRef represents an institution entity in OpenAlex.
+type OpenAlexInstitutionRef struct {
+	ID          string `json:"id"`
+	DisplayName string `json:"display_name"`
+	ROR         string `json:"ror,omitempty"`
+	Type        string `json:"type,omitempty"`
+}
+
+// OpenAlexTopicRef represents a research topic in OpenAlex.
+type OpenAlexTopicRef struct {
+	ID          string               `json:"id"`
+	DisplayName string               `json:"display_name"`
+	Subfield    *OpenAlexTaxonomyRef `json:"subfield,omitempty"`
+	Field       *OpenAlexTaxonomyRef `json:"field,omitempty"`
+	Domain      *OpenAlexTaxonomyRef `json:"domain,omitempty"`
+}
+
+// OpenAlexTaxonomyRef represents a subfield, field, or domain entity.
+type OpenAlexTaxonomyRef struct {
+	ID          string `json:"id"`
+	DisplayName string `json:"display_name"`
+}
+
+// OpenAlexLocation represents a location / hosting venue for a work.
+type OpenAlexLocation struct {
+	Source *OpenAlexSourceRef `json:"source,omitempty"`
+}
+
+// OpenAlexSourceRef represents a journal, repository, or publisher host.
+type OpenAlexSourceRef struct {
+	ID               string `json:"id"`
+	DisplayName      string `json:"display_name"`
+	Type             string `json:"type,omitempty"`
+	HostOrganization string `json:"host_organization,omitempty"`
+	HostOrgName      string `json:"host_organization_name,omitempty"`
+}
+
+// OpenAlexSearchFunc searches the openalex-works index for matching scholarly records.
+type OpenAlexSearchFunc func(ctx context.Context, isbns []string, title string, authors []string, dois []string) ([]OpenAlexWork, error)
+
 type dataspaceLoader struct {
 	svc *dataspaceService
 }
@@ -78,16 +148,18 @@ func (l dataspaceLoader) Reload(ctx context.Context, key string, _ DataspaceGrap
 }
 
 type dataspaceService struct {
-	catalogSearch func(context.Context, string) ([]catalog.Book, error)
-	inkSearch     InkSearchFunc
-	cache         *otter.Cache[string, DataspaceGraphResponse]
-	loader        dataspaceLoader
+	catalogSearch  func(context.Context, string) ([]catalog.Book, error)
+	inkSearch      InkSearchFunc
+	openAlexSearch OpenAlexSearchFunc
+	cache          *otter.Cache[string, DataspaceGraphResponse]
+	loader         dataspaceLoader
 }
 
-func newDataspaceService(catalogSearch func(context.Context, string) ([]catalog.Book, error), inkSearch InkSearchFunc) *dataspaceService {
+func newDataspaceService(catalogSearch func(context.Context, string) ([]catalog.Book, error), inkSearch InkSearchFunc, openAlexSearch OpenAlexSearchFunc) *dataspaceService {
 	svc := &dataspaceService{
-		catalogSearch: catalogSearch,
-		inkSearch:     inkSearch,
+		catalogSearch:  catalogSearch,
+		inkSearch:      inkSearch,
+		openAlexSearch: openAlexSearch,
 		cache: otter.Must(&otter.Options[string, DataspaceGraphResponse]{
 			MaximumSize:      2000,
 			ExpiryCalculator: otter.ExpiryWriting[string, DataspaceGraphResponse](5 * time.Minute),
@@ -175,7 +247,23 @@ func buildInkDetailURL(signature, fallbackURL string) string {
 	return "https://mediathek.hgk.fhnw.ch/ink/de"
 }
 
-func buildOpenAlexWorkURL(doi, isbn, title string) string {
+func cleanEntityID(rawID, defaultPrefix string) string {
+	rawID = strings.TrimSpace(rawID)
+	if rawID == "" {
+		return ""
+	}
+	rawID = strings.TrimPrefix(rawID, "https://openalex.org/")
+	rawID = strings.TrimPrefix(rawID, "http://openalex.org/")
+	if defaultPrefix != "" {
+		rawID = strings.TrimPrefix(rawID, defaultPrefix+"/")
+	}
+	return rawID
+}
+
+func buildOpenAlexWorkURL(workID, doi, isbn, title string) string {
+	if id := cleanEntityID(workID, "works"); id != "" && (strings.HasPrefix(id, "W") || len(id) > 2) {
+		return fmt.Sprintf("https://openalex.org/works/%s", id)
+	}
 	if doi != "" {
 		cleanDOI := strings.TrimPrefix(doi, "https://doi.org/")
 		cleanDOI = strings.TrimPrefix(cleanDOI, "http://doi.org/")
@@ -191,9 +279,18 @@ func buildOpenAlexWorkURL(doi, isbn, title string) string {
 	return "https://openalex.org/works"
 }
 
-func buildAuthorOrGNDURL(identifier, name string) (urlStr string, tooltip string) {
-	if gndID := extractGNDID(identifier); gndID != "" {
-		return fmt.Sprintf("https://lobid.org/gnd/%s", url.PathEscape(gndID)), fmt.Sprintf("GND: %s (lobid.org)", gndID)
+func buildOpenAlexAuthorURL(authorID, orcid, name string) (urlStr string, tooltip string) {
+	if id := cleanEntityID(authorID, "authors"); id != "" && (strings.HasPrefix(id, "A") || len(id) > 2) {
+		tip := fmt.Sprintf("OpenAlex Author: %s", id)
+		if name != "" {
+			tip = fmt.Sprintf("OpenAlex Author: %s (%s)", name, id)
+		}
+		return fmt.Sprintf("https://openalex.org/authors/%s", id), tip
+	}
+	if orcid != "" {
+		cleanORCID := strings.TrimPrefix(orcid, "https://orcid.org/")
+		cleanORCID = strings.TrimPrefix(cleanORCID, "http://orcid.org/")
+		return fmt.Sprintf("https://orcid.org/%s", cleanORCID), fmt.Sprintf("ORCID: %s", cleanORCID)
 	}
 	if name != "" {
 		return fmt.Sprintf("https://openalex.org/authors?search=%s", url.QueryEscape(name)), fmt.Sprintf("OpenAlex Author: %s", name)
@@ -201,9 +298,20 @@ func buildAuthorOrGNDURL(identifier, name string) (urlStr string, tooltip string
 	return "https://openalex.org/authors", "OpenAlex Authors"
 }
 
-func buildTopicOrGNDURL(identifier, label string) (urlStr string, tooltip string) {
+func buildAuthorOrGNDURL(identifier, name string) (urlStr string, tooltip string) {
 	if gndID := extractGNDID(identifier); gndID != "" {
 		return fmt.Sprintf("https://lobid.org/gnd/%s", url.PathEscape(gndID)), fmt.Sprintf("GND: %s (lobid.org)", gndID)
+	}
+	return buildOpenAlexAuthorURL(identifier, "", name)
+}
+
+func buildOpenAlexTopicURL(topicID, label string) (urlStr string, tooltip string) {
+	if id := cleanEntityID(topicID, "topics"); id != "" && (strings.HasPrefix(id, "T") || len(id) > 2) {
+		tip := fmt.Sprintf("OpenAlex Topic: %s", id)
+		if label != "" {
+			tip = fmt.Sprintf("OpenAlex Topic: %s (%s)", label, id)
+		}
+		return fmt.Sprintf("https://openalex.org/topics/%s", id), tip
 	}
 	if label != "" {
 		return fmt.Sprintf("https://openalex.org/topics?search=%s", url.QueryEscape(label)), fmt.Sprintf("OpenAlex Topic: %s", label)
@@ -211,14 +319,52 @@ func buildTopicOrGNDURL(identifier, label string) (urlStr string, tooltip string
 	return "https://openalex.org/topics", "OpenAlex Topics"
 }
 
-func buildOpenAlexInstitutionURL(name string) string {
+func buildTopicOrGNDURL(identifier, label string) (urlStr string, tooltip string) {
+	if gndID := extractGNDID(identifier); gndID != "" {
+		return fmt.Sprintf("https://lobid.org/gnd/%s", url.PathEscape(gndID)), fmt.Sprintf("GND: %s (lobid.org)", gndID)
+	}
+	return buildOpenAlexTopicURL(identifier, label)
+}
+
+func buildOpenAlexSubfieldURL(subfieldID, label string) string {
+	if id := cleanEntityID(subfieldID, "subfields"); id != "" {
+		return fmt.Sprintf("https://openalex.org/subfields/%s", id)
+	}
+	return "https://openalex.org/subfields"
+}
+
+func buildOpenAlexFieldURL(fieldID, label string) string {
+	if id := cleanEntityID(fieldID, "fields"); id != "" {
+		return fmt.Sprintf("https://openalex.org/fields/%s", id)
+	}
+	return "https://openalex.org/fields"
+}
+
+func buildOpenAlexDomainURL(domainID, label string) string {
+	if id := cleanEntityID(domainID, "domains"); id != "" {
+		return fmt.Sprintf("https://openalex.org/domains/%s", id)
+	}
+	return "https://openalex.org/domains"
+}
+
+func buildOpenAlexInstitutionURL(instID, ror, name string) string {
+	if id := cleanEntityID(instID, "institutions"); id != "" && (strings.HasPrefix(id, "I") || len(id) > 2) {
+		return fmt.Sprintf("https://openalex.org/institutions/%s", id)
+	}
+	if ror != "" {
+		cleanROR := strings.TrimPrefix(ror, "https://ror.org/")
+		return fmt.Sprintf("https://ror.org/%s", cleanROR)
+	}
 	if name != "" {
 		return fmt.Sprintf("https://openalex.org/institutions?search=%s", url.QueryEscape(name))
 	}
 	return "https://openalex.org/institutions"
 }
 
-func buildOpenAlexSourceURL(name string) string {
+func buildOpenAlexSourceURL(sourceID, name string) string {
+	if id := cleanEntityID(sourceID, "sources"); id != "" && (strings.HasPrefix(id, "S") || len(id) > 2) {
+		return fmt.Sprintf("https://openalex.org/sources/%s", id)
+	}
 	if name != "" {
 		return fmt.Sprintf("https://openalex.org/sources?search=%s", url.QueryEscape(name))
 	}
@@ -226,10 +372,8 @@ func buildOpenAlexSourceURL(name string) string {
 }
 
 func buildOpenAlexPublisherURL(pubID, name string) string {
-	if pubID != "" && (strings.HasPrefix(pubID, "P") || strings.HasPrefix(pubID, "https://openalex.org/P")) {
-		cleanID := strings.TrimPrefix(pubID, "https://openalex.org/publishers/")
-		cleanID = strings.TrimPrefix(cleanID, "https://openalex.org/")
-		return fmt.Sprintf("https://openalex.org/publishers/%s", cleanID)
+	if id := cleanEntityID(pubID, "publishers"); id != "" && (strings.HasPrefix(id, "P") || len(id) > 2) {
+		return fmt.Sprintf("https://openalex.org/publishers/%s", id)
 	}
 	if name != "" {
 		return fmt.Sprintf("https://openalex.org/publishers?search=%s", url.QueryEscape(name))
@@ -476,7 +620,7 @@ func (s *dataspaceService) buildGraph(ctx context.Context, cleanBarcodes []strin
 			}
 			libNodeID := "Lib_" + slugify(libName)
 			addNode(&physicalNodes, libNodeID, fmt.Sprintf("        %s[\"%s\"]:::nodeInst", libNodeID, sanitizeMermaidLabel(libName)))
-			addClick(libNodeID, buildOpenAlexInstitutionURL(libName), fmt.Sprintf("Bibliothek / Institution: %s", libName))
+			addClick(libNodeID, buildOpenAlexInstitutionURL("", "", libName), fmt.Sprintf("Bibliothek / Institution: %s", libName))
 			addEdge(almaNodeID, "-->", "held at", libNodeID)
 
 			if holding.CallNumber != "" {
@@ -515,7 +659,7 @@ func (s *dataspaceService) buildGraph(ctx context.Context, cleanBarcodes []strin
 					corpNodeID := "Corp_" + slugify(name.NamePart)
 					corpURL, corpTip := buildAuthorOrGNDURL(name.Identifier, name.NamePart)
 					if !strings.Contains(corpURL, "lobid.org") {
-						corpURL = buildOpenAlexInstitutionURL(name.NamePart)
+						corpURL = buildOpenAlexInstitutionURL("", "", name.NamePart)
 						corpTip = fmt.Sprintf("Institution: %s", name.NamePart)
 					}
 					addNode(&scholarlyNodes, corpNodeID, fmt.Sprintf("        %s[\"Institution: %s\"]:::nodeInst", corpNodeID, corpName))
@@ -574,102 +718,299 @@ func (s *dataspaceService) buildGraph(ctx context.Context, cleanBarcodes []strin
 			}
 		}
 
-		// OpenAlex Work Representation
-		workNodeID := fmt.Sprintf("Work_%d", i+1)
-		workLabel := fmt.Sprintf("OpenAlex Work: %s", titleStr)
-		if isbnStr != "" {
-			workLabel += fmt.Sprintf("<br/>ISBN: %s", isbnStr)
-		}
-		addNode(&scholarlyNodes, workNodeID, fmt.Sprintf("        %s[\"%s\"]:::nodeWork", workNodeID, sanitizeMermaidLabel(workLabel)))
-		addClick(workNodeID, buildOpenAlexWorkURL("", isbnStr, titleStr), fmt.Sprintf("OpenAlex Work: %s", titleStr))
-		addEdge(almaNodeID, "-.->", "resolves to", workNodeID)
-
-		for _, authID := range bookAuthors {
-			addEdge(workNodeID, "-->", "authored by", authID)
-		}
-
-		// Publishers / Sources
-		for _, pub := range book.Publications {
-			for _, publisher := range pub.Publisher {
-				if publisher != "" {
-					pubNodeID := "Pub_" + slugify(publisher)
-					addNode(&scholarlyNodes, pubNodeID, fmt.Sprintf("        %s[/\"Publisher: %s\"/]:::nodeSource", pubNodeID, sanitizeMermaidLabel(publisher)))
-					addClick(pubNodeID, buildOpenAlexSourceURL(publisher), fmt.Sprintf("OpenAlex Source: %s", publisher))
-					addEdge(workNodeID, "-->", "published by", pubNodeID)
+		// OpenAlex Work Representation: Query openalex-works if search is available
+		var matchedOAWorks []OpenAlexWork
+		if s.openAlexSearch != nil {
+			var searchDOIs []string
+			if len(book.Identifiers) > 0 {
+				for _, oid := range book.Identifiers {
+					if strings.Contains(strings.ToLower(oid), "doi") || strings.HasPrefix(oid, "10.") {
+						searchDOIs = append(searchDOIs, oid)
+					}
 				}
+			}
+			oaWorks, err := s.openAlexSearch(ctx, isbnList, titleStr, rawAuthorNames, searchDOIs)
+			if err == nil && len(oaWorks) > 0 {
+				matchedOAWorks = oaWorks
 			}
 		}
 
-		// Subjects / Topics
 		var bookTopics []string
-		for _, topicMap := range book.Subjects.Topic {
-			for _, term := range topicMap {
-				if term.Label != "" {
-					topicLabel := sanitizeMermaidLabel(term.Label)
-					topicNodeID := "Topic_" + slugify(term.Label)
-					topicURL, topicTip := buildTopicOrGNDURL(term.Identifier, term.Label)
-					addNode(&taxonomyNodes, topicNodeID, fmt.Sprintf("        %s[(\"Topic: %s\")]:::nodeTopic", topicNodeID, topicLabel))
-					addClick(topicNodeID, topicURL, topicTip)
-					addEdge(workNodeID, "-->", "primary topic", topicNodeID)
-					bookTopics = append(bookTopics, topicNodeID)
 
-					// Disciplinary Taxonomy Bridge
-					subfieldNodeID := "Subfield_" + slugify("subfield_"+term.Label)
-					fieldNodeID := "Field_" + slugify("field_"+term.Label)
-					domainNodeID := "Domain_Science"
+		if len(matchedOAWorks) > 0 {
+			for oaIdx, oaWork := range matchedOAWorks {
+				if oaIdx >= 2 {
+					break
+				}
+				oaWorkNodeID := fmt.Sprintf("Work_%d", i+1)
+				if oaIdx > 0 {
+					oaWorkNodeID = fmt.Sprintf("Work_%d_%d", i+1, oaIdx+1)
+				}
+				if oaWork.ID != "" {
+					oaWorkNodeID = "Work_" + slugify(cleanEntityID(oaWork.ID, "works"))
+				}
+				oaTitle := oaWork.DisplayName
+				if oaTitle == "" {
+					oaTitle = oaWork.Title
+				}
+				if oaTitle == "" {
+					oaTitle = titleStr
+				}
+				oaDisplayTitle := truncateText(oaTitle, 40)
+				oaLabel := fmt.Sprintf("OpenAlex: %s", oaDisplayTitle)
+				if oaWork.PublicationYear > 0 {
+					oaLabel += fmt.Sprintf(" (%d)", oaWork.PublicationYear)
+				}
+				if oaWork.Type != "" {
+					oaLabel += fmt.Sprintf("<br/>Type: %s", oaWork.Type)
+				}
+				addNode(&scholarlyNodes, oaWorkNodeID, fmt.Sprintf("        %s[\"%s\"]:::nodeWork", oaWorkNodeID, sanitizeMermaidLabel(oaLabel)))
+				addClick(oaWorkNodeID, buildOpenAlexWorkURL(oaWork.ID, oaWork.DOI, isbnStr, oaTitle), fmt.Sprintf("OpenAlex Work: %s", oaTitle))
+				addEdge(almaNodeID, "-.->", "resolves to", oaWorkNodeID)
 
-					addNode(&taxonomyNodes, subfieldNodeID, fmt.Sprintf("        %s[[\"Subfield: %s\"]]:::nodeTaxonomy", subfieldNodeID, topicLabel))
-					addClick(subfieldNodeID, "https://openalex.org/subfields", fmt.Sprintf("OpenAlex Subfield: %s", topicLabel))
+				// OpenAlex Authors & Institutions
+				for _, authorship := range oaWork.Authorships {
+					if authorship.Author.DisplayName != "" || authorship.Author.ID != "" {
+						authName := authorship.Author.DisplayName
+						authID := authorship.Author.ID
+						oaAuthNodeID := "OAAuth_" + slugify(authName)
+						if authID != "" {
+							oaAuthNodeID = "OAAuth_" + slugify(cleanEntityID(authID, "authors"))
+						}
+						oaAuthURL, oaAuthTip := buildOpenAlexAuthorURL(authID, authorship.Author.ORCID, authName)
+						addNode(&scholarlyNodes, oaAuthNodeID, fmt.Sprintf("        %s{{\"Author: %s\"}}:::nodeAuthor", oaAuthNodeID, sanitizeMermaidLabel(authName)))
+						addClick(oaAuthNodeID, oaAuthURL, oaAuthTip)
+						addEdge(oaWorkNodeID, "-->", "authored by", oaAuthNodeID)
+						bookAuthors = append(bookAuthors, oaAuthNodeID)
 
-					addNode(&taxonomyNodes, fieldNodeID, fmt.Sprintf("        %s[[\"Field: Academic Field\"]]:::nodeTaxonomy", fieldNodeID))
-					addClick(fieldNodeID, "https://openalex.org/fields", "OpenAlex Academic Fields")
+						for _, inst := range authorship.Institutions {
+							if inst.DisplayName != "" || inst.ID != "" {
+								instName := inst.DisplayName
+								instID := inst.ID
+								oaInstNodeID := "OAInst_" + slugify(instName)
+								if instID != "" {
+									oaInstNodeID = "OAInst_" + slugify(cleanEntityID(instID, "institutions"))
+								}
+								oaInstURL := buildOpenAlexInstitutionURL(instID, inst.ROR, instName)
+								addNode(&scholarlyNodes, oaInstNodeID, fmt.Sprintf("        %s[\"Institution: %s\"]:::nodeInst", oaInstNodeID, sanitizeMermaidLabel(instName)))
+								addClick(oaInstNodeID, oaInstURL, fmt.Sprintf("OpenAlex Institution: %s", instName))
+								addEdge(oaAuthNodeID, "-->", "affiliated with", oaInstNodeID)
+							}
+						}
+					}
+				}
 
-					addNode(&taxonomyNodes, domainNodeID, fmt.Sprintf("        %s[[\"Domain: Interdisciplinary Sciences\"]]:::nodeTaxonomy", domainNodeID))
-					addClick(domainNodeID, "https://openalex.org/domains", "OpenAlex Domains: Science")
+				// Sources / Publishers
+				if oaWork.PrimaryLocation != nil && oaWork.PrimaryLocation.Source != nil {
+					src := oaWork.PrimaryLocation.Source
+					if src.DisplayName != "" || src.ID != "" {
+						srcName := src.DisplayName
+						srcID := src.ID
+						oaSrcNodeID := "OASrc_" + slugify(srcName)
+						if srcID != "" {
+							oaSrcNodeID = "OASrc_" + slugify(cleanEntityID(srcID, "sources"))
+						}
+						oaSrcURL := buildOpenAlexSourceURL(srcID, srcName)
+						addNode(&scholarlyNodes, oaSrcNodeID, fmt.Sprintf("        %s[/\"Source: %s\"/]:::nodeSource", oaSrcNodeID, sanitizeMermaidLabel(srcName)))
+						addClick(oaSrcNodeID, oaSrcURL, fmt.Sprintf("OpenAlex Source: %s", srcName))
+						addEdge(oaWorkNodeID, "-->", "published in", oaSrcNodeID)
 
-					addEdge(topicNodeID, "-->", "subfield of", subfieldNodeID)
-					addEdge(subfieldNodeID, "-->", "field of", fieldNodeID)
-					addEdge(fieldNodeID, "-->", "domain of", domainNodeID)
+						if src.HostOrganization != "" || src.HostOrgName != "" {
+							pubID := src.HostOrganization
+							pubName := src.HostOrgName
+							if pubName == "" {
+								pubName = "Publisher"
+							}
+							oaPubNodeID := "OAPub_" + slugify(pubName)
+							if pubID != "" {
+								oaPubNodeID = "OAPub_" + slugify(cleanEntityID(pubID, "publishers"))
+							}
+							oaPubURL := buildOpenAlexPublisherURL(pubID, pubName)
+							addNode(&scholarlyNodes, oaPubNodeID, fmt.Sprintf("        %s[/\"Publisher: %s\"/]:::nodeSource", oaPubNodeID, sanitizeMermaidLabel(pubName)))
+							addClick(oaPubNodeID, oaPubURL, fmt.Sprintf("OpenAlex Publisher: %s", pubName))
+							addEdge(oaSrcNodeID, "-->", "hosted by", oaPubNodeID)
+						}
+					}
+				}
+
+				// Topics & Taxonomy Hierarchy
+				if oaWork.PrimaryTopic != nil && (oaWork.PrimaryTopic.DisplayName != "" || oaWork.PrimaryTopic.ID != "") {
+					top := oaWork.PrimaryTopic
+					topName := top.DisplayName
+					topID := top.ID
+					oaTopicNodeID := "Topic_" + slugify(topName)
+					if topID != "" {
+						oaTopicNodeID = "Topic_" + slugify(cleanEntityID(topID, "topics"))
+					}
+					oaTopicURL, oaTopicTip := buildOpenAlexTopicURL(topID, topName)
+					addNode(&taxonomyNodes, oaTopicNodeID, fmt.Sprintf("        %s[(\"Topic: %s\")]:::nodeTopic", oaTopicNodeID, sanitizeMermaidLabel(topName)))
+					addClick(oaTopicNodeID, oaTopicURL, oaTopicTip)
+					addEdge(oaWorkNodeID, "-->", "primary topic", oaTopicNodeID)
+					bookTopics = append(bookTopics, oaTopicNodeID)
+
+					if top.Subfield != nil && (top.Subfield.DisplayName != "" || top.Subfield.ID != "") {
+						sub := top.Subfield
+						subName := sub.DisplayName
+						subID := sub.ID
+						oaSubNodeID := "Subfield_" + slugify(subName)
+						if subID != "" {
+							oaSubNodeID = "Subfield_" + slugify(cleanEntityID(subID, "subfields"))
+						}
+						oaSubURL := buildOpenAlexSubfieldURL(subID, subName)
+						addNode(&taxonomyNodes, oaSubNodeID, fmt.Sprintf("        %s[[\"Subfield: %s\"]]:::nodeTaxonomy", oaSubNodeID, sanitizeMermaidLabel(subName)))
+						addClick(oaSubNodeID, oaSubURL, fmt.Sprintf("OpenAlex Subfield: %s", subName))
+						addEdge(oaTopicNodeID, "-->", "subfield of", oaSubNodeID)
+
+						if top.Field != nil && (top.Field.DisplayName != "" || top.Field.ID != "") {
+							field := top.Field
+							fieldName := field.DisplayName
+							fieldID := field.ID
+							oaFieldNodeID := "Field_" + slugify(fieldName)
+							if fieldID != "" {
+								oaFieldNodeID = "Field_" + slugify(cleanEntityID(fieldID, "fields"))
+							}
+							oaFieldURL := buildOpenAlexFieldURL(fieldID, fieldName)
+							addNode(&taxonomyNodes, oaFieldNodeID, fmt.Sprintf("        %s[[\"Field: %s\"]]:::nodeTaxonomy", oaFieldNodeID, sanitizeMermaidLabel(fieldName)))
+							addClick(oaFieldNodeID, oaFieldURL, fmt.Sprintf("OpenAlex Field: %s", fieldName))
+							addEdge(oaSubNodeID, "-->", "field of", oaFieldNodeID)
+
+							if top.Domain != nil && (top.Domain.DisplayName != "" || top.Domain.ID != "") {
+								domain := top.Domain
+								domainName := domain.DisplayName
+								domainID := domain.ID
+								oaDomainNodeID := "Domain_" + slugify(domainName)
+								if domainID != "" {
+									oaDomainNodeID = "Domain_" + slugify(cleanEntityID(domainID, "domains"))
+								}
+								oaDomainURL := buildOpenAlexDomainURL(domainID, domainName)
+								addNode(&taxonomyNodes, oaDomainNodeID, fmt.Sprintf("        %s[[\"Domain: %s\"]]:::nodeTaxonomy", oaDomainNodeID, sanitizeMermaidLabel(domainName)))
+								addClick(oaDomainNodeID, oaDomainURL, fmt.Sprintf("OpenAlex Domain: %s", domainName))
+								addEdge(oaFieldNodeID, "-->", "domain of", oaDomainNodeID)
+							}
+						}
+					}
+				}
+
+				// Secondary Topics
+				for _, secTopic := range oaWork.Topics {
+					if secTopic.DisplayName != "" && (oaWork.PrimaryTopic == nil || secTopic.ID != oaWork.PrimaryTopic.ID) {
+						secNodeID := "Topic_" + slugify(secTopic.DisplayName)
+						if secTopic.ID != "" {
+							secNodeID = "Topic_" + slugify(cleanEntityID(secTopic.ID, "topics"))
+						}
+						secURL, secTip := buildOpenAlexTopicURL(secTopic.ID, secTopic.DisplayName)
+						addNode(&taxonomyNodes, secNodeID, fmt.Sprintf("        %s[(\"Topic: %s\")]:::nodeTopic", secNodeID, sanitizeMermaidLabel(secTopic.DisplayName)))
+						addClick(secNodeID, secURL, secTip)
+						addEdge(oaWorkNodeID, "-->", "treats topic", secNodeID)
+						bookTopics = append(bookTopics, secNodeID)
+					}
+				}
+
+				discoveredWorks = append(discoveredWorks, workRef{
+					bookIdx: i,
+					workID:  oaWorkNodeID,
+					title:   oaTitle,
+					authors: bookAuthors,
+					topics:  bookTopics,
+				})
+			}
+		} else {
+			// Fallback: OpenAlex Work representation derived from Alma catalog metadata
+			workNodeID := fmt.Sprintf("Work_%d", i+1)
+			workLabel := fmt.Sprintf("OpenAlex Work: %s", titleStr)
+			if isbnStr != "" {
+				workLabel += fmt.Sprintf("<br/>ISBN: %s", isbnStr)
+			}
+			addNode(&scholarlyNodes, workNodeID, fmt.Sprintf("        %s[\"%s\"]:::nodeWork", workNodeID, sanitizeMermaidLabel(workLabel)))
+			addClick(workNodeID, buildOpenAlexWorkURL("", "", isbnStr, titleStr), fmt.Sprintf("OpenAlex Work: %s", titleStr))
+			addEdge(almaNodeID, "-.->", "resolves to", workNodeID)
+
+			for _, authID := range bookAuthors {
+				addEdge(workNodeID, "-->", "authored by", authID)
+			}
+
+			// Publishers / Sources
+			for _, pub := range book.Publications {
+				for _, publisher := range pub.Publisher {
+					if publisher != "" {
+						pubNodeID := "Pub_" + slugify(publisher)
+						addNode(&scholarlyNodes, pubNodeID, fmt.Sprintf("        %s[/\"Publisher: %s\"/]:::nodeSource", pubNodeID, sanitizeMermaidLabel(publisher)))
+						addClick(pubNodeID, buildOpenAlexPublisherURL("", publisher), fmt.Sprintf("OpenAlex Publisher: %s", publisher))
+						addEdge(workNodeID, "-->", "published by", pubNodeID)
+					}
 				}
 			}
-		}
 
-		// Fallback topic if no specific subjects
-		if len(bookTopics) == 0 && len(book.Subjects.Local.All) > 0 {
-			for _, localSub := range book.Subjects.Local.All {
-				if localSub != "" {
-					topicLabel := sanitizeMermaidLabel(localSub)
-					topicNodeID := "Topic_" + slugify(localSub)
-					topicURL, topicTip := buildTopicOrGNDURL("", localSub)
-					addNode(&taxonomyNodes, topicNodeID, fmt.Sprintf("        %s[(\"Subject: %s\")]:::nodeTopic", topicNodeID, topicLabel))
-					addClick(topicNodeID, topicURL, topicTip)
-					addEdge(workNodeID, "-->", "treats topic", topicNodeID)
-					bookTopics = append(bookTopics, topicNodeID)
+			// Subjects / Topics
+			for _, topicMap := range book.Subjects.Topic {
+				for _, term := range topicMap {
+					if term.Label != "" {
+						topicLabel := sanitizeMermaidLabel(term.Label)
+						topicNodeID := "Topic_" + slugify(term.Label)
+						topicURL, topicTip := buildTopicOrGNDURL(term.Identifier, term.Label)
+						addNode(&taxonomyNodes, topicNodeID, fmt.Sprintf("        %s[(\"Topic: %s\")]:::nodeTopic", topicNodeID, topicLabel))
+						addClick(topicNodeID, topicURL, topicTip)
+						addEdge(workNodeID, "-->", "primary topic", topicNodeID)
+						bookTopics = append(bookTopics, topicNodeID)
+
+						// Disciplinary Taxonomy Bridge
+						subfieldNodeID := "Subfield_" + slugify("subfield_"+term.Label)
+						fieldNodeID := "Field_" + slugify("field_"+term.Label)
+						domainNodeID := "Domain_Science"
+
+						addNode(&taxonomyNodes, subfieldNodeID, fmt.Sprintf("        %s[[\"Subfield: %s\"]]:::nodeTaxonomy", subfieldNodeID, topicLabel))
+						addClick(subfieldNodeID, "https://openalex.org/subfields", fmt.Sprintf("OpenAlex Subfield: %s", topicLabel))
+
+						addNode(&taxonomyNodes, fieldNodeID, fmt.Sprintf("        %s[[\"Field: Academic Field\"]]:::nodeTaxonomy", fieldNodeID))
+						addClick(fieldNodeID, "https://openalex.org/fields", "OpenAlex Academic Fields")
+
+						addNode(&taxonomyNodes, domainNodeID, fmt.Sprintf("        %s[[\"Domain: Interdisciplinary Sciences\"]]:::nodeTaxonomy", domainNodeID))
+						addClick(domainNodeID, "https://openalex.org/domains", "OpenAlex Domains: Science")
+
+						addEdge(topicNodeID, "-->", "subfield of", subfieldNodeID)
+						addEdge(subfieldNodeID, "-->", "field of", fieldNodeID)
+						addEdge(fieldNodeID, "-->", "domain of", domainNodeID)
+					}
 				}
 			}
+
+			// Fallback topic if no specific subjects
+			if len(bookTopics) == 0 && len(book.Subjects.Local.All) > 0 {
+				for _, localSub := range book.Subjects.Local.All {
+					if localSub != "" {
+						topicLabel := sanitizeMermaidLabel(localSub)
+						topicNodeID := "Topic_" + slugify(localSub)
+						topicURL, topicTip := buildTopicOrGNDURL("", localSub)
+						addNode(&taxonomyNodes, topicNodeID, fmt.Sprintf("        %s[(\"Subject: %s\")]:::nodeTopic", topicNodeID, topicLabel))
+						addClick(topicNodeID, topicURL, topicTip)
+						addEdge(workNodeID, "-->", "treats topic", topicNodeID)
+						bookTopics = append(bookTopics, topicNodeID)
+					}
+				}
+			}
+
+			if len(bookTopics) == 0 {
+				genericTopicID := fmt.Sprintf("Topic_Gen_%d", i+1)
+				genericSubfieldID := fmt.Sprintf("Subfield_Gen_%d", i+1)
+				genericURL, genericTip := buildTopicOrGNDURL("", titleStr)
+				addNode(&taxonomyNodes, genericTopicID, fmt.Sprintf("        %s[(\"Research Topic: %s\")]:::nodeTopic", genericTopicID, sanitizeMermaidLabel(titleStr)))
+				addClick(genericTopicID, genericURL, genericTip)
+
+				addNode(&taxonomyNodes, genericSubfieldID, fmt.Sprintf("        %s[[\"Disciplinary Field\"]]:::nodeTaxonomy", genericSubfieldID))
+				addClick(genericSubfieldID, "https://openalex.org/subfields", "OpenAlex Disciplinary Field")
+
+				addEdge(workNodeID, "-->", "primary topic", genericTopicID)
+				addEdge(genericTopicID, "-->", "subfield of", genericSubfieldID)
+			}
+
+			discoveredWorks = append(discoveredWorks, workRef{
+				bookIdx: i,
+				workID:  workNodeID,
+				title:   titleStr,
+				authors: bookAuthors,
+				topics:  bookTopics,
+			})
 		}
-
-		if len(bookTopics) == 0 {
-			genericTopicID := fmt.Sprintf("Topic_Gen_%d", i+1)
-			genericSubfieldID := fmt.Sprintf("Subfield_Gen_%d", i+1)
-			genericURL, genericTip := buildTopicOrGNDURL("", titleStr)
-			addNode(&taxonomyNodes, genericTopicID, fmt.Sprintf("        %s[(\"Research Topic: %s\")]:::nodeTopic", genericTopicID, sanitizeMermaidLabel(titleStr)))
-			addClick(genericTopicID, genericURL, genericTip)
-
-			addNode(&taxonomyNodes, genericSubfieldID, fmt.Sprintf("        %s[[\"Disciplinary Field\"]]:::nodeTaxonomy", genericSubfieldID))
-			addClick(genericSubfieldID, "https://openalex.org/subfields", "OpenAlex Disciplinary Field")
-
-			addEdge(workNodeID, "-->", "primary topic", genericTopicID)
-			addEdge(genericTopicID, "-->", "subfield of", genericSubfieldID)
-		}
-
-		discoveredWorks = append(discoveredWorks, workRef{
-			bookIdx: i,
-			workID:  workNodeID,
-			title:   titleStr,
-			authors: bookAuthors,
-			topics:  bookTopics,
-		})
 	}
 
 	// Multi-item correlation: discover shared authors, topics, or citation paths

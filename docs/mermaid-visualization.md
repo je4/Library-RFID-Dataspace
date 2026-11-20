@@ -232,21 +232,23 @@ The Mermaid flowchart integrates actionable deep links (`click <NodeID> href "<U
 | Target Platform / Entity | URL Pattern & Example | Node Target & Usage |
 | :--- | :--- | :--- |
 | **GND Authority (lobid.org)** | `https://lobid.org/gnd/{gndId}`<br/>*Example*: `https://lobid.org/gnd/118772295` | `nodeAuthor`, `nodeTopic` with extracted GND identifier (`(DE-588)...`) |
-| **Swisscovery Library Catalog** | `https://swisscovery.ch/discovery/search?query=any,contains,{mmsIdOrSearch}&tab=41SLSP_NETWORK&search_scope=DN_and_CI&vid=41SLSP_NETWORK:VU1_UNION`<br/>*Example*: `https://swisscovery.ch/discovery/search?query=any,contains,991170430529605501&tab=41SLSP_NETWORK&search_scope=DN_and_CI&vid=41SLSP_NETWORK:VU1_UNION` | `nodeAlma` (Physical Alma record / MMS ID search) |
-| **Mediathek HGK InK Detail** | `https://mediathek.hgk.fhnw.ch/ink/detail/{signature}/de`<br/>*Example*: `https://mediathek.hgk.fhnw.ch/ink/detail/zotero2-2068924.UHBBY3JP/de` | `nodeInk` (Individual media asset or student thesis) |
+| **Swisscovery Library Catalog** | `https://swisscovery.ch/discovery/search?query=any,contains,{mmsIdOrSearch}&tab=41SLSP_NETWORK&search_scope=DN_and_CI&vid=41SLSP_NETWORK:VU1_UNION`<br/>*Example*: `https://swisscovery.ch/discovery/search?query=any,contains,991170430529605501&tab=41SLSP_NETWORK&search_scope=DN_and_CI&vid=41SLSP_NETWORK:VU1_UNION` | `nodeAlma` (Direct MMS ID extracted from Alma catalog record) |
+| **Mediathek HGK InK Detail** | `https://mediathek.hgk.fhnw.ch/ink/detail/{signature}/de`<br/>*Example*: `https://mediathek.hgk.fhnw.ch/ink/detail/zotero2-2068924.UHBBY3JP/de` | `nodeInk` (Direct `signature` from `fhnw_ink` document) |
 | **Mediathek HGK InK Portal** | `https://mediathek.hgk.fhnw.ch/ink/de` | `nodeInk` (`InkPortal`, `InkColl_*` collections) |
-| **OpenAlex Works** | `https://openalex.org/works/{workId}` or `?search={isbn/title}`<br/>*Example*: `https://openalex.org/works/W642892681` | `nodeWork` (Scholarly publication node) |
-| **OpenAlex Authors** | `https://openalex.org/authors/{authorId}` or `?search={name}`<br/>*Example*: `https://openalex.org/authors/A5090064378` | `nodeAuthor` (Researcher profile without direct GND) |
-| **OpenAlex Institutions** | `https://openalex.org/institutions/{institutionId}` or `?search={name}`<br/>*Example*: `https://openalex.org/institutions/I118019719` | `nodeInst` (Universities, libraries, corporate contributors) |
-| **OpenAlex Publishers** | `https://openalex.org/publishers/{publisherId}` or `?search={name}`<br/>*Example*: `https://openalex.org/publishers/P4310320990` | `nodeSource` (Publishing houses and parent organizations) |
-| **OpenAlex Sources** | `https://openalex.org/sources/{sourceId}` or `?search={name}`<br/>*Example*: `https://openalex.org/sources/S7407052672` | `nodeSource` (Journals, conferences, repositories) |
+| **OpenAlex Works** | `https://openalex.org/works/{workId}`<br/>*Example*: `https://openalex.org/works/W642892681` | `nodeWork` (Direct `id` extracted from `openalex-works` document) |
+| **OpenAlex Authors** | `https://openalex.org/authors/{authorId}`<br/>*Example*: `https://openalex.org/authors/A5090064378` | `nodeAuthor` (Direct `authorships.author.id` from OpenAlex) |
+| **OpenAlex Institutions** | `https://openalex.org/institutions/{institutionId}`<br/>*Example*: `https://openalex.org/institutions/I118019719` | `nodeInst` (Direct `authorships.institutions.id` from OpenAlex) |
+| **OpenAlex Publishers** | `https://openalex.org/publishers/{publisherId}`<br/>*Example*: `https://openalex.org/publishers/P4310320990` | `nodeSource` (Direct `source.host_organization` ID from OpenAlex) |
+| **OpenAlex Sources** | `https://openalex.org/sources/{sourceId}`<br/>*Example*: `https://openalex.org/sources/S7407052672` | `nodeSource` (Direct `primary_location.source.id` from OpenAlex) |
+| **OpenAlex Topics** | `https://openalex.org/topics/{topicId}`<br/>*Example*: `https://openalex.org/topics/T10123` | `nodeTopic` (Direct `primary_topic.id` or `topics[].id` from OpenAlex) |
+| **OpenAlex Subfields** | `https://openalex.org/subfields/{subfieldId}`<br/>*Example*: `https://openalex.org/subfields/1702` | `nodeTaxonomy` (Direct `primary_topic.subfield.id` from OpenAlex) |
+| **OpenAlex Fields** | `https://openalex.org/fields/{fieldId}`<br/>*Example*: `https://openalex.org/fields/17` | `nodeTaxonomy` (Direct `primary_topic.field.id` from OpenAlex) |
+| **OpenAlex Domains** | `https://openalex.org/domains/{domainId}`<br/>*Example*: `https://openalex.org/domains/3` | `nodeTaxonomy` (Direct `primary_topic.domain.id` from OpenAlex) |
 | **OpenAlex Types** | `https://openalex.org/types/{type}`<br/>*Example*: `https://openalex.org/types/article` | Work publication types (`article`, `book`, `thesis`) |
 | **OpenAlex Institution Types** | `https://openalex.org/institution-types/{type}`<br/>*Example*: `https://openalex.org/institution-types/education` | Institutional categories (`education`, `healthcare`, `facility`) |
 | **OpenAlex Source Types** | `https://openalex.org/source-types/{type}`<br/>*Example*: `https://openalex.org/source-types/repository` | Source venue categories (`repository`, `journal`, `conference`) |
 | **OpenAlex Indexes** | `https://openalex.org/indexes/{index}`<br/>*Example*: `https://openalex.org/indexes/crossref` | Bibliographic indexing registries (`crossref`, `doaj`) |
 | **OpenAlex Source Lists** | `https://openalex.org/source-lists/{list}`<br/>*Example*: `https://openalex.org/source-lists/cwts-core` | Curated source lists (`cwts-core`, `doaj`) |
-| **OpenAlex Topics** | `https://openalex.org/topics/{topicId}` or `?search={label}` | `nodeTopic` (Faceted research topics) |
-| **OpenAlex Subfields & Fields** | `https://openalex.org/subfields`, `https://openalex.org/fields`, `https://openalex.org/domains` | `nodeTaxonomy` (Taxonomy hierarchy nodes) |
 
 ---
 

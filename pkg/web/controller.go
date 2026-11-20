@@ -20,22 +20,23 @@ import (
 
 // Config defines settings for the rfid-dataspace web server.
 type Config struct {
-	CatalogSearch func(context.Context, string) ([]catalog.Book, error)
-	InkSearch     InkSearchFunc
-	SourceRecords []SourceRecordMapping
-	Addr          string
-	ExtAddr       string
-	ClientName    string
-	WSBroker      string
-	Channels      []string
-	DefaultISIL   string
-	DefaultAFI    string
-	ThemeLight    string
-	ThemeDark     string
-	Hub           *desk.Hub
-	RFIDClient    libraryclient.Client
-	ISILList      map[string]*desk.ISILEntry
-	Logger        zLogger.ZLogger
+	CatalogSearch  func(context.Context, string) ([]catalog.Book, error)
+	InkSearch      InkSearchFunc
+	OpenAlexSearch OpenAlexSearchFunc
+	SourceRecords  []SourceRecordMapping
+	Addr           string
+	ExtAddr        string
+	ClientName     string
+	WSBroker       string
+	Channels       []string
+	DefaultISIL    string
+	DefaultAFI     string
+	ThemeLight     string
+	ThemeDark      string
+	Hub            *desk.Hub
+	RFIDClient     libraryclient.Client
+	ISILList       map[string]*desk.ISILEntry
+	Logger         zLogger.ZLogger
 }
 
 // Controller manages HTTP routes, SSE streaming, and embedded frontend rendering.
@@ -76,7 +77,7 @@ func NewController(cfg Config) (*Controller, error) {
 	if cfg.CatalogSearch != nil {
 		ctrl.catalogService = newCatalogService(cfg.CatalogSearch)
 	}
-	ctrl.dataspaceService = newDataspaceService(cfg.CatalogSearch, cfg.InkSearch)
+	ctrl.dataspaceService = newDataspaceService(cfg.CatalogSearch, cfg.InkSearch, cfg.OpenAlexSearch)
 
 	// Compile templates for all supported languages
 	ctrl.languageTemplates = make(map[string]*template.Template)

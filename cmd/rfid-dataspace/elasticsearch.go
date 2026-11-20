@@ -122,3 +122,122 @@ func searchInkItems(ctx context.Context, client *elasticsearch.TypedClient, inde
 
 	return items, nil
 }
+
+// searchOpenAlexWorks queries the openalex-works index for scholarly records matching the scanned item.
+func searchOpenAlexWorks(ctx context.Context, client *elasticsearch.TypedClient, index string, isbns []string, title string, authors []string, dois []string) ([]web.OpenAlexWork, error) {
+	if client == nil || index == "" {
+		return nil, nil
+	}
+
+	var shouldQueries []types.Query
+
+	for _, doi := range dois {
+		doi = strings.TrimSpace(doi)
+		if doi != "" {
+			cleanDOI := strings.TrimPrefix(doi, "https://doi.org/")
+			cleanDOI = strings.TrimPrefix(cleanDOI, "http://doi.org/")
+			cleanDOI = strings.TrimPrefix(cleanDOI, "doi:")
+			shouldQueries = append(shouldQueries,
+				types.Query{
+					MatchPhrase: map[string]types.MatchPhraseQuery{
+						"doi": {Query: doi},
+					},
+				},
+				types.Query{
+					MatchPhrase: map[string]types.MatchPhraseQuery{
+						"doi": {Query: cleanDOI},
+					},
+				},
+				types.Query{
+					MatchPhrase: map[string]types.MatchPhraseQuery{
+						"ids.doi": {Query: cleanDOI},
+					},
+				},
+			)
+		}
+	}
+
+	for _, isbn := range isbns {
+		isbn = strings.TrimSpace(isbn)
+		if isbn != "" {
+			cleanISBN := strings.ReplaceAll(isbn, "-", "")
+			shouldQueries = append(shouldQueries,
+				types.Query{
+					MatchPhrase: map[string]types.MatchPhraseQuery{
+						"ids.isbn": {Query: isbn},
+					},
+				},
+				types.Query{
+					MatchPhrase: map[string]types.MatchPhraseQuery{
+						"ids.isbn": {Query: cleanISBN},
+					},
+				},
+				types.Query{
+					Match: map[string]types.MatchQuery{
+						"title": {Query: isbn},
+					},
+				},
+			)
+		}
+	}
+
+	for _, author := range authors {
+		author = strings.TrimSpace(author)
+		if author != "" {
+			shouldQueries = append(shouldQueries, types.Query{
+				MatchPhrase: map[string]types.MatchPhraseQuery{
+					"authorships.author.display_name": {Query: author},
+				},
+			})
+		}
+	}
+
+	if title != "" && title != "Ohne Titel" {
+		shouldQueries = append(shouldQueries,
+			types.Query{
+				Match: map[string]types.MatchQuery{
+					"title": {Query: title},
+				},
+			},
+			types.Query{
+				Match: map[string]types.MatchQuery{
+					"display_name": {Query: title},
+				},
+			},
+		)
+	}
+
+	if len(shouldQueries) == 0 {
+		return nil, nil
+	}
+
+	size := 5
+	req := &search.Request{
+		Query: &types.Query{
+			Bool: &types.BoolQuery{
+				Should:             shouldQueries,
+				MinimumShouldMatch: "1",
+			},
+		},
+		Size: &size,
+	}
+
+	res, err := client.Search().Index(index).Request(req).Do(ctx)
+	if err != nil {
+		return nil, errors.Wrapf(err, "cannot search openalex works index %s", index)
+	}
+
+	works := make([]web.OpenAlexWork, 0, len(res.Hits.Hits))
+	for _, hit := range res.Hits.Hits {
+		var work web.OpenAlexWork
+		if err := json.Unmarshal(hit.Source_, &work); err != nil {
+			continue
+		}
+		if work.ID == "" && hit.Id_ != nil && *hit.Id_ != "" {
+			work.ID = *hit.Id_
+		}
+		works = append(works, work)
+	}
+
+	return works, nil
+}

@@ -12,7 +12,7 @@ import (
 )
 
 func TestDataspaceService_Empty(t *testing.T) {
-	svc := newDataspaceService(nil, nil)
+	svc := newDataspaceService(nil, nil, nil)
 	resp, err := svc.GenerateMermaid(context.Background(), nil, "TD")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -69,7 +69,7 @@ func TestDataspaceService_SingleBook(t *testing.T) {
 		}, nil
 	}
 
-	svc := newDataspaceService(mockSearch, mockInk)
+	svc := newDataspaceService(mockSearch, mockInk, nil)
 	resp, err := svc.GenerateMermaid(context.Background(), []string{"0001847294"}, "TD")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -151,6 +151,43 @@ func TestDataspaceService_URLHelpers(t *testing.T) {
 		t.Errorf("expected 4002851-3, got %s", id)
 	}
 
+	// OpenAlex Direct Work URLs
+	if url := buildOpenAlexWorkURL("https://openalex.org/W642892681", "", "", ""); url != "https://openalex.org/works/W642892681" {
+		t.Errorf("expected https://openalex.org/works/W642892681, got %s", url)
+	}
+	if url := buildOpenAlexWorkURL("W642892681", "", "", ""); url != "https://openalex.org/works/W642892681" {
+		t.Errorf("expected https://openalex.org/works/W642892681, got %s", url)
+	}
+
+	// OpenAlex Direct Author URLs
+	if url, _ := buildOpenAlexAuthorURL("https://openalex.org/A5090064378", "", "Albrecht Fölsing"); url != "https://openalex.org/authors/A5090064378" {
+		t.Errorf("expected https://openalex.org/authors/A5090064378, got %s", url)
+	}
+
+	// OpenAlex Direct Institution URLs
+	if url := buildOpenAlexInstitutionURL("https://openalex.org/I118019719", "", "University of Hamburg"); url != "https://openalex.org/institutions/I118019719" {
+		t.Errorf("expected https://openalex.org/institutions/I118019719, got %s", url)
+	}
+
+	// OpenAlex Direct Source URLs
+	if url := buildOpenAlexSourceURL("https://openalex.org/S7407052672", "Physikalische Blätter"); url != "https://openalex.org/sources/S7407052672" {
+		t.Errorf("expected https://openalex.org/sources/S7407052672, got %s", url)
+	}
+
+	// OpenAlex Direct Topic & Taxonomy URLs
+	if url, _ := buildOpenAlexTopicURL("https://openalex.org/T10123", "Electromagnetic Theory"); url != "https://openalex.org/topics/T10123" {
+		t.Errorf("expected https://openalex.org/topics/T10123, got %s", url)
+	}
+	if url := buildOpenAlexSubfieldURL("https://openalex.org/subfields/1702", "Artificial Intelligence"); url != "https://openalex.org/subfields/1702" {
+		t.Errorf("expected https://openalex.org/subfields/1702, got %s", url)
+	}
+	if url := buildOpenAlexFieldURL("https://openalex.org/fields/17", "Computer Science"); url != "https://openalex.org/fields/17" {
+		t.Errorf("expected https://openalex.org/fields/17, got %s", url)
+	}
+	if url := buildOpenAlexDomainURL("https://openalex.org/domains/3", "Physical Sciences"); url != "https://openalex.org/domains/3" {
+		t.Errorf("expected https://openalex.org/domains/3, got %s", url)
+	}
+
 	// OpenAlex Types
 	if url := buildOpenAlexTypeURL("article"); url != "https://openalex.org/types/article" {
 		t.Errorf("expected https://openalex.org/types/article, got %s", url)
@@ -180,6 +217,110 @@ func TestDataspaceService_URLHelpers(t *testing.T) {
 	}
 }
 
+func TestDataspaceService_OpenAlexDirectMatching(t *testing.T) {
+	mockSearch := func(_ context.Context, barcode string) ([]catalog.Book, error) {
+		return []catalog.Book{
+			{
+				ID: "oai:alma.41SLSP_FNW:990049881560205518",
+				Titles: []catalog.Title{
+					{Title: "Heinrich Hertz: Erinnerungen, Briefe, Tagebücher"},
+				},
+				ISBNs: []catalog.ISBN{
+					{Enriched: "978-3-8171-3420-1"},
+				},
+				PersonalNames: []map[string]catalog.Name{
+					{"aut": {NamePart: "Fölsing, Albrecht"}},
+				},
+			},
+		}, nil
+	}
+
+	mockOpenAlex := func(_ context.Context, isbns []string, title string, authors []string, dois []string) ([]OpenAlexWork, error) {
+		return []OpenAlexWork{
+			{
+				ID:              "https://openalex.org/W642892681",
+				DisplayName:     "Heinrich Hertz und die elektromagnetischen Wellen",
+				PublicationYear: 1997,
+				Type:            "article",
+				Authorships: []OpenAlexAuthorship{
+					{
+						Author: OpenAlexAuthorRef{
+							ID:          "https://openalex.org/A5090064378",
+							DisplayName: "Albrecht Fölsing",
+							ORCID:       "https://orcid.org/0000-0002-1825-0097",
+						},
+						Institutions: []OpenAlexInstitutionRef{
+							{
+								ID:          "https://openalex.org/I118019719",
+								DisplayName: "University of Hamburg",
+							},
+						},
+					},
+				},
+				PrimaryLocation: &OpenAlexLocation{
+					Source: &OpenAlexSourceRef{
+						ID:               "https://openalex.org/S7407052672",
+						DisplayName:      "Physikalische Blätter",
+						HostOrganization: "https://openalex.org/P4310320990",
+						HostOrgName:      "Wiley-VCH",
+					},
+				},
+				PrimaryTopic: &OpenAlexTopicRef{
+					ID:          "https://openalex.org/T10123",
+					DisplayName: "Electromagnetic Theory",
+					Subfield: &OpenAlexTaxonomyRef{
+						ID:          "https://openalex.org/subfields/3104",
+						DisplayName: "Condensed Matter Physics",
+					},
+					Field: &OpenAlexTaxonomyRef{
+						ID:          "https://openalex.org/fields/31",
+						DisplayName: "Physics and Astronomy",
+					},
+					Domain: &OpenAlexTaxonomyRef{
+						ID:          "https://openalex.org/domains/3",
+						DisplayName: "Physical Sciences",
+					},
+				},
+			},
+		}, nil
+	}
+
+	svc := newDataspaceService(mockSearch, nil, mockOpenAlex)
+	resp, err := svc.GenerateMermaid(context.Background(), []string{"0001847294"}, "TD")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	// Verify exact direct OpenAlex deep links
+	if !strings.Contains(resp.Mermaid, "https://openalex.org/works/W642892681") {
+		t.Errorf("expected direct OpenAlex Work URL, got: %s", resp.Mermaid)
+	}
+	if !strings.Contains(resp.Mermaid, "https://openalex.org/authors/A5090064378") {
+		t.Errorf("expected direct OpenAlex Author URL, got: %s", resp.Mermaid)
+	}
+	if !strings.Contains(resp.Mermaid, "https://openalex.org/institutions/I118019719") {
+		t.Errorf("expected direct OpenAlex Institution URL, got: %s", resp.Mermaid)
+	}
+	if !strings.Contains(resp.Mermaid, "https://openalex.org/sources/S7407052672") {
+		t.Errorf("expected direct OpenAlex Source URL, got: %s", resp.Mermaid)
+	}
+	if !strings.Contains(resp.Mermaid, "https://openalex.org/publishers/P4310320990") {
+		t.Errorf("expected direct OpenAlex Publisher URL, got: %s", resp.Mermaid)
+	}
+	if !strings.Contains(resp.Mermaid, "https://openalex.org/topics/T10123") {
+		t.Errorf("expected direct OpenAlex Topic URL, got: %s", resp.Mermaid)
+	}
+	if !strings.Contains(resp.Mermaid, "https://openalex.org/subfields/3104") {
+		t.Errorf("expected direct OpenAlex Subfield URL, got: %s", resp.Mermaid)
+	}
+	if !strings.Contains(resp.Mermaid, "https://openalex.org/fields/31") {
+		t.Errorf("expected direct OpenAlex Field URL, got: %s", resp.Mermaid)
+	}
+	if !strings.Contains(resp.Mermaid, "https://openalex.org/domains/3") {
+		t.Errorf("expected direct OpenAlex Domain URL, got: %s", resp.Mermaid)
+	}
+}
+
 func TestDataspaceService_MultiBook(t *testing.T) {
 	mockSearch := func(_ context.Context, barcode string) ([]catalog.Book, error) {
 		switch barcode {
@@ -206,7 +347,7 @@ func TestDataspaceService_MultiBook(t *testing.T) {
 		}
 	}
 
-	svc := newDataspaceService(mockSearch, nil)
+	svc := newDataspaceService(mockSearch, nil, nil)
 	resp, err := svc.GenerateMermaid(context.Background(), []string{"BC-01", "BC-02"}, "LR")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
