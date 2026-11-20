@@ -942,3 +942,109 @@ func TestDataspaceService_AlmaReverseMatchForCitingWorks(t *testing.T) {
 		t.Errorf("expected AlmaSwisscoveryURL with MMS-ID, got %s", cwRep.AlmaSwisscoveryURL)
 	}
 }
+
+func TestDataspaceService_CoCitationInReportAndGraph(t *testing.T) {
+	mockSearch := func(_ context.Context, barcode string) ([]catalog.Book, error) {
+		if barcode == "BARCODE_A" {
+			return []catalog.Book{
+				{
+					ID:     "oai:alma.41SLSP_FNW:99001",
+					Titles: []catalog.Title{{Title: "Quantum Mechanics"}},
+					PersonalNames: []map[string]catalog.Name{
+						{"aut": {NamePart: "Dirac, Paul"}},
+					},
+				},
+			}, nil
+		}
+		if barcode == "BARCODE_B" {
+			return []catalog.Book{
+				{
+					ID:     "oai:alma.41SLSP_FNW:99002",
+					Titles: []catalog.Title{{Title: "Information Theory"}},
+					PersonalNames: []map[string]catalog.Name{
+						{"aut": {NamePart: "Shannon, Claude"}},
+					},
+				},
+			}, nil
+		}
+		return nil, nil
+	}
+
+	mockOpenAlex := func(_ context.Context, isbns []string, title string, authors []string, dois []string) ([]OpenAlexWork, error) {
+		if strings.Contains(title, "Quantum") {
+			return []OpenAlexWork{
+				{
+					ID:              "https://openalex.org/W101",
+					DisplayName:     "The Principles of Quantum Mechanics",
+					PublicationYear: 1930,
+					CitedByCount:    25000,
+				},
+			}, nil
+		}
+		if strings.Contains(title, "Information") {
+			return []OpenAlexWork{
+				{
+					ID:              "https://openalex.org/W102",
+					DisplayName:     "A Mathematical Theory of Communication",
+					PublicationYear: 1948,
+					CitedByCount:    80000,
+				},
+			}, nil
+		}
+		return nil, nil
+	}
+
+	// Both W101 and W102 are cited by W999
+	mockCitingSearch := func(_ context.Context, workID string, limit int) ([]OpenAlexWork, error) {
+		return []OpenAlexWork{
+			{
+				ID:              "https://openalex.org/W999",
+				DisplayName:     "Quantum Computation and Quantum Information",
+				PublicationYear: 2000,
+				CitedByCount:    50000,
+			},
+		}, nil
+	}
+
+	svc := newDataspaceService(mockSearch, nil, nil, mockOpenAlex, mockCitingSearch)
+
+	// Verify Report contains Co-Citation SharedLink
+	report, err := svc.GenerateReport(context.Background(), []string{"BARCODE_A", "BARCODE_B"})
+	if err != nil {
+		t.Fatalf("report generation failed: %v", err)
+	}
+
+	if len(report.SharedLinks) == 0 {
+		t.Fatalf("expected at least 1 shared link for co-citation, got 0")
+	}
+
+	foundCoCitation := false
+	for _, link := range report.SharedLinks {
+		if link.RelationType == "Co-Citation" {
+			foundCoCitation = true
+			if !strings.Contains(link.Description, "Quantum Computation and Quantum Information") {
+				t.Errorf("unexpected co-citation description: %s", link.Description)
+			}
+		}
+	}
+	if !foundCoCitation {
+		t.Errorf("expected Co-Citation relation type in SharedLinks")
+	}
+
+	// Verify Graph merges citing node for both books
+	graph, err := svc.GenerateMermaid(context.Background(), []string{"BARCODE_A", "BARCODE_B"}, "TD")
+	if err != nil {
+		t.Fatalf("graph generation failed: %v", err)
+	}
+
+	if !strings.Contains(graph.Mermaid, "Citing_W999") {
+		t.Errorf("expected Citing_W999 node in graph, got: %s", graph.Mermaid)
+	}
+	// Check that Citing_W999 points to both works
+	if !strings.Contains(graph.Mermaid, "==>|\"CITES\"| OAWork_1_1") {
+		t.Errorf("expected Citing_W999 to cite OAWork_1_1, got: %s", graph.Mermaid)
+	}
+	if !strings.Contains(graph.Mermaid, "==>|\"CITES\"| OAWork_2_1") {
+		t.Errorf("expected Citing_W999 to cite OAWork_2_1, got: %s", graph.Mermaid)
+	}
+}

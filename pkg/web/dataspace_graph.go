@@ -89,6 +89,7 @@ func (s *dataspaceService) buildGraph(ctx context.Context, cleanBarcodes []strin
 		title           string
 		rawWorkID       string
 		referencedWorks []string
+		citingWorks     []string
 		authors         []string
 		topics          []string
 	}
@@ -229,7 +230,16 @@ func (s *dataspaceService) buildGraph(ctx context.Context, cleanBarcodes []strin
 						if cwTitle == "" {
 							cwTitle = "Citing Publication"
 						}
-						citingNodeID := fmt.Sprintf("Citing_%d_%d_%d", i+1, j+1, k+1)
+						cwID := cleanEntityID(cw.ID, "works")
+						var citingNodeID string
+						if cwID != "" {
+							citingNodeID = "Citing_" + slugify(cwID)
+						} else if cw.DOI != "" {
+							citingNodeID = "Citing_" + slugify(cw.DOI)
+						} else {
+							citingNodeID = fmt.Sprintf("Citing_%d_%d_%d", i+1, j+1, k+1)
+						}
+
 						citingLabel := fmt.Sprintf("Cited in: %s", truncateText(cwTitle, 30))
 						if cw.PublicationYear > 0 {
 							citingLabel += fmt.Sprintf("<br/>(%d)", cw.PublicationYear)
@@ -247,7 +257,15 @@ func (s *dataspaceService) buildGraph(ctx context.Context, cleanBarcodes []strin
 						addEdge(citingNodeID, "==>", "CITES", oaWorkNodeID)
 
 						if cw.AlmaBook != nil {
-							almaCitingNodeID := fmt.Sprintf("AlmaCiting_%d_%d_%d", i+1, j+1, k+1)
+							var almaCitingNodeID string
+							if cwID != "" {
+								almaCitingNodeID = "AlmaCiting_" + slugify(cwID)
+							} else if cw.DOI != "" {
+								almaCitingNodeID = "AlmaCiting_" + slugify(cw.DOI)
+							} else {
+								almaCitingNodeID = fmt.Sprintf("AlmaCiting_%d_%d_%d", i+1, j+1, k+1)
+							}
+
 							almaCitingLabel := fmt.Sprintf("Library Inventory: %s", truncateText(cwTitle, 28))
 							callNum := extractBookCallNumber(cw.AlmaBook)
 							if callNum != "" {
@@ -402,12 +420,23 @@ func (s *dataspaceService) buildGraph(ctx context.Context, cleanBarcodes []strin
 					}
 				}
 
+				var citingWorkIDs []string
+				for _, cw := range oaWork.CitingWorks {
+					cID := cleanEntityID(cw.ID, "works")
+					if cID != "" {
+						citingWorkIDs = append(citingWorkIDs, cID)
+					} else if cw.DOI != "" {
+						citingWorkIDs = append(citingWorkIDs, strings.ToLower(cw.DOI))
+					}
+				}
+
 				discoveredWorks = append(discoveredWorks, workRef{
 					bookIdx:         i,
 					workID:          oaWorkNodeID,
 					title:           oaTitle,
 					rawWorkID:       oaWork.ID,
 					referencedWorks: oaWork.ReferencedWorks,
+					citingWorks:     citingWorkIDs,
 					authors:         bookAuthors,
 					topics:          bookTopics,
 				})
@@ -535,6 +564,20 @@ func (s *dataspaceService) buildGraph(ctx context.Context, cleanBarcodes []strin
 					citesDirect = true
 				}
 
+				// Check co-citation (shared citing works)
+				hasCoCitation := false
+				for _, c1 := range w1.citingWorks {
+					for _, c2 := range w2.citingWorks {
+						if c1 != "" && c1 == c2 {
+							hasCoCitation = true
+							break
+						}
+					}
+					if hasCoCitation {
+						break
+					}
+				}
+
 				// Check shared authors
 				for _, a1 := range w1.authors {
 					for _, a2 := range w2.authors {
@@ -555,7 +598,7 @@ func (s *dataspaceService) buildGraph(ctx context.Context, cleanBarcodes []strin
 					}
 				}
 
-				if !citesDirect && i == 0 && j == 1 {
+				if !citesDirect && !hasCoCitation && i == 0 && j == 1 {
 					addEdge(w1.workID, "==>", "RELATED WORK", w2.workID)
 				}
 			}

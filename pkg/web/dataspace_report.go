@@ -2,6 +2,7 @@ package web
 
 import (
 	"context"
+	"fmt"
 	"strings"
 	"time"
 )
@@ -289,17 +290,27 @@ func (s *dataspaceService) buildReport(ctx context.Context, cleanBarcodes []stri
 
 	// Detect Shared Cross-Links between items
 	var sharedLinks []DataspaceReportLink
+	seenLinks := make(map[string]bool)
+
+	addSharedLink := func(link DataspaceReportLink) {
+		key := fmt.Sprintf("%s|%s|%s|%s", link.SourceBarcode, link.TargetBarcode, link.RelationType, link.Description)
+		if !seenLinks[key] {
+			seenLinks[key] = true
+			sharedLinks = append(sharedLinks, link)
+		}
+	}
+
 	if len(reportItems) > 1 {
 		for i := 0; i < len(reportItems); i++ {
 			for j := i + 1; j < len(reportItems); j++ {
 				itemA := reportItems[i]
 				itemB := reportItems[j]
 
-				// Check citation relationships between items
+				// Check direct citation relationships between items
 				for _, oaA := range items[i].openAlexWorks {
 					for _, oaB := range items[j].openAlexWorks {
 						if isWorkReferenced(oaA.ReferencedWorks, oaB.ID) {
-							sharedLinks = append(sharedLinks, DataspaceReportLink{
+							addSharedLink(DataspaceReportLink{
 								SourceBarcode: itemA.Barcode,
 								SourceTitle:   itemA.Title,
 								TargetBarcode: itemB.Barcode,
@@ -309,7 +320,7 @@ func (s *dataspaceService) buildReport(ctx context.Context, cleanBarcodes []stri
 							})
 						}
 						if isWorkReferenced(oaB.ReferencedWorks, oaA.ID) {
-							sharedLinks = append(sharedLinks, DataspaceReportLink{
+							addSharedLink(DataspaceReportLink{
 								SourceBarcode: itemB.Barcode,
 								SourceTitle:   itemB.Title,
 								TargetBarcode: itemA.Barcode,
@@ -318,6 +329,41 @@ func (s *dataspaceService) buildReport(ctx context.Context, cleanBarcodes []stri
 								Description:   itemB.Title + " zitiert " + itemA.Title,
 							})
 						}
+
+						// Check Co-Citation relationships (shared citing works)
+						for _, cwA := range oaA.CitingWorks {
+							for _, cwB := range oaB.CitingWorks {
+								idA := cleanEntityID(cwA.ID, "works")
+								idB := cleanEntityID(cwB.ID, "works")
+								isSameCitingWork := (idA != "" && idA == idB) ||
+									(cwA.DOI != "" && strings.EqualFold(cwA.DOI, cwB.DOI))
+
+								if isSameCitingWork {
+									cwTitle := cwA.DisplayName
+									if cwTitle == "" {
+										cwTitle = cwA.Title
+									}
+									if cwTitle == "" {
+										cwTitle = "Zitierende Publikation"
+									}
+									desc := fmt.Sprintf("Gemeinsam zitiert in: %s", cwTitle)
+									if cwA.PublicationYear > 0 {
+										desc += fmt.Sprintf(" (%d)", cwA.PublicationYear)
+									}
+									if cwA.AlmaBook != nil {
+										desc += " [Im Bibliotheksbestand vorhanden]"
+									}
+									addSharedLink(DataspaceReportLink{
+										SourceBarcode: itemA.Barcode,
+										SourceTitle:   itemA.Title,
+										TargetBarcode: itemB.Barcode,
+										TargetTitle:   itemB.Title,
+										RelationType:  "Co-Citation",
+										Description:   desc,
+									})
+								}
+							}
+						}
 					}
 				}
 
@@ -325,7 +371,7 @@ func (s *dataspaceService) buildReport(ctx context.Context, cleanBarcodes []stri
 				for _, a1 := range itemA.Authors {
 					for _, a2 := range itemB.Authors {
 						if strings.EqualFold(a1.Name, a2.Name) {
-							sharedLinks = append(sharedLinks, DataspaceReportLink{
+							addSharedLink(DataspaceReportLink{
 								SourceBarcode: itemA.Barcode,
 								SourceTitle:   itemA.Title,
 								TargetBarcode: itemB.Barcode,
@@ -341,7 +387,7 @@ func (s *dataspaceService) buildReport(ctx context.Context, cleanBarcodes []stri
 				for _, t1 := range itemA.Subjects {
 					for _, t2 := range itemB.Subjects {
 						if strings.EqualFold(t1.Label, t2.Label) {
-							sharedLinks = append(sharedLinks, DataspaceReportLink{
+							addSharedLink(DataspaceReportLink{
 								SourceBarcode: itemA.Barcode,
 								SourceTitle:   itemA.Title,
 								TargetBarcode: itemB.Barcode,

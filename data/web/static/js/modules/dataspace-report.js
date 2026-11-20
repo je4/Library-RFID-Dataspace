@@ -160,7 +160,7 @@ function renderReportHTML(report) {
     </div>
 
     <!-- Executive Metrics Summary Card -->
-    <div class="dataspace-report-metrics grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+    <div class="dataspace-report-metrics grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-3">
         <div class="metric-card bg-base-200/50 border border-base-200 p-3 rounded-xl flex flex-col">
             <span class="text-[11px] font-semibold text-base-content/60 uppercase">Medien</span>
             <span class="text-2xl font-black text-primary">${report.itemCount || 0}</span>
@@ -180,6 +180,11 @@ function renderReportHTML(report) {
             <span class="text-[11px] font-semibold text-base-content/60 uppercase">Publikationen</span>
             <span class="text-2xl font-black text-indigo-600">${report.summary?.openAlexHits || 0}</span>
             <span class="text-[10px] text-base-content/50">OpenAlex Works</span>
+        </div>
+        <div class="metric-card bg-base-200/50 border border-base-200 p-3 rounded-xl flex flex-col">
+            <span class="text-[11px] font-semibold text-base-content/60 uppercase">Zitationen</span>
+            <span class="text-2xl font-black text-emerald-600">${report.summary?.totalCitations || 0}</span>
+            <span class="text-[10px] text-base-content/50">Wissenschaftlicher Impact</span>
         </div>
         <div class="metric-card bg-base-200/50 border border-base-200 p-3 rounded-xl flex flex-col">
             <span class="text-[11px] font-semibold text-base-content/60 uppercase">Autoren</span>
@@ -242,17 +247,40 @@ function renderReportHTML(report) {
                 <span>Identifizierte Querverbindungen & Gemeinsamkeiten</span>
             </h3>
             <div class="grid grid-cols-1 md:grid-cols-2 gap-2">
-                ${report.sharedLinks.map(link => `
-                    <div class="bg-base-100 p-2.5 rounded-lg border border-base-200 text-xs flex items-start gap-2">
-                        <span class="badge badge-xs badge-primary shrink-0 mt-0.5">${escapeHtml(link.relationType)}</span>
-                        <div>
-                            <span class="font-semibold">${escapeHtml(link.description)}</span>
-                            <div class="text-[11px] text-base-content/60 mt-0.5">
-                                <span>${escapeHtml(link.sourceTitle)}</span> ↔ <span>${escapeHtml(link.targetTitle)}</span>
+                ${report.sharedLinks.map(link => {
+                    let badgeClass = 'badge-primary';
+                    let iconSvg = '';
+                    if (link.relationType === 'Co-Citation') {
+                        badgeClass = 'badge-accent';
+                        iconSvg = `<svg class="w-3 h-3 text-accent shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="17 1 21 5 17 9"></polyline><path d="M3 11V9a4 4 0 0 1 4-4h14"></path><polyline points="7 23 3 19 7 15"></polyline><path d="M21 13v2a4 4 0 0 1-4 4H3"></path></svg>`;
+                    } else if (link.relationType === 'Cites Work') {
+                        badgeClass = 'badge-secondary';
+                        iconSvg = `<svg class="w-3 h-3 text-secondary shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon></svg>`;
+                    } else if (link.relationType === 'Shared Author') {
+                        badgeClass = 'badge-warning';
+                        iconSvg = `<svg class="w-3 h-3 text-warning shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>`;
+                    } else if (link.relationType === 'Shared Topic') {
+                        badgeClass = 'badge-info';
+                        iconSvg = `<svg class="w-3 h-3 text-info shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"></path><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"></path></svg>`;
+                    }
+
+                    return `
+                    <div class="bg-base-100 p-2.5 rounded-lg border border-base-200 text-xs flex items-start gap-2.5 shadow-2xs">
+                        <span class="badge badge-xs ${badgeClass} shrink-0 mt-0.5 font-semibold">${escapeHtml(link.relationType)}</span>
+                        <div class="flex-1 min-w-0">
+                            <div class="flex items-center gap-1 font-semibold text-base-content leading-tight">
+                                ${iconSvg}
+                                <span>${escapeHtml(link.description)}</span>
+                            </div>
+                            <div class="text-[11px] text-base-content/60 mt-1 flex items-center gap-1">
+                                <span class="truncate max-w-[45%]" title="${escapeHtml(link.sourceTitle)}">${escapeHtml(link.sourceTitle)}</span>
+                                <span class="text-primary font-bold">↔</span>
+                                <span class="truncate max-w-[45%]" title="${escapeHtml(link.targetTitle)}">${escapeHtml(link.targetTitle)}</span>
                             </div>
                         </div>
                     </div>
-                `).join('')}
+                    `;
+                }).join('')}
             </div>
         </div>
         `;
@@ -415,9 +443,15 @@ function renderItemDossierCard(item, index) {
                 ${item.openAlexWorks.map(oa => `
                     <div class="dataspace-openalex-entry p-3 bg-indigo-500/5 border border-indigo-500/20 rounded-xl text-xs flex flex-col gap-2">
                         <div class="flex flex-wrap items-center justify-between gap-1">
-                            <div>
+                            <div class="flex flex-wrap items-center gap-1.5">
                                 <span class="font-bold text-base-content">${escapeHtml(oa.displayName)}</span>
-                                ${oa.publicationYear ? `<span class="badge badge-xs badge-ghost ml-1">(${oa.publicationYear})</span>` : ''}
+                                ${oa.publicationYear ? `<span class="badge badge-xs badge-ghost">(${oa.publicationYear})</span>` : ''}
+                                ${oa.citedByCount !== undefined && oa.citedByCount !== null ? `
+                                    <a href="${oa.citedByUrl || oa.workUrl}" target="_blank" rel="noopener noreferrer" class="badge badge-xs ${oa.citedByCount > 0 ? 'badge-accent' : 'badge-ghost'} gap-1 font-semibold" title="${oa.citedByCount} Zitationen in OpenAlex">
+                                        <svg class="w-2.5 h-2.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>
+                                        ${oa.citedByCount} ${oa.citedByCount === 1 ? 'Zitation' : 'Zitationen'}
+                                    </a>
+                                ` : ''}
                             </div>
                             <div class="flex items-center gap-1.5 print:hidden">
                                 ${oa.doiUrl ? `<a href="${oa.doiUrl}" target="_blank" rel="noopener noreferrer" class="badge badge-xs badge-outline">DOI</a>` : ''}
@@ -454,6 +488,52 @@ function renderItemDossierCard(item, index) {
                                             <span class="text-base-content/50 font-mono text-[10px]">(${escapeHtml(a.institutions[0].name)})</span>
                                         ` : ''}
                                     </span>
+                                `).join('')}
+                            </div>
+                        </div>
+                        ` : ''}
+
+                        ${oa.citingWorks && oa.citingWorks.length > 0 ? `
+                        <div class="mt-2 pt-2 border-t border-indigo-500/10 flex flex-col gap-1.5">
+                            <div class="flex items-center justify-between">
+                                <span class="font-bold text-indigo-800 dark:text-indigo-300 text-[11px] uppercase tracking-wide flex items-center gap-1">
+                                    <svg class="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="17 1 21 5 17 9"></polyline><path d="M3 11V9a4 4 0 0 1 4-4h14"></path><polyline points="7 23 3 19 7 15"></polyline><path d="M21 13v2a4 4 0 0 1-4 4H3"></path></svg>
+                                    Zitierende Arbeiten (${oa.citingWorks.length}):
+                                </span>
+                                ${oa.citedByUrl ? `
+                                    <a href="${oa.citedByUrl}" target="_blank" rel="noopener noreferrer" class="text-[10px] text-primary hover:underline flex items-center gap-0.5 print:hidden">
+                                        Alle Zitationen in OpenAlex
+                                        <svg class="w-2.5 h-2.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path><polyline points="15 3 21 3 21 9"></polyline></svg>
+                                    </a>
+                                ` : ''}
+                            </div>
+                            <div class="flex flex-col gap-1.5 mt-0.5">
+                                ${oa.citingWorks.map(cw => `
+                                    <div class="p-2 bg-base-100/70 border border-base-200 rounded-lg text-[11px] flex flex-col gap-1">
+                                        <div class="flex flex-wrap items-center justify-between gap-1">
+                                            <div class="font-semibold text-base-content">
+                                                <span>${escapeHtml(cw.displayName)}</span>
+                                                ${cw.publicationYear ? `<span class="text-base-content/60 ml-1">(${cw.publicationYear})</span>` : ''}
+                                            </div>
+                                            <div class="flex items-center gap-1 print:hidden">
+                                                ${cw.doiUrl ? `<a href="${cw.doiUrl}" target="_blank" rel="noopener noreferrer" class="badge badge-xs badge-outline text-[10px]">DOI</a>` : ''}
+                                                <a href="${cw.workUrl}" target="_blank" rel="noopener noreferrer" class="badge badge-xs badge-primary text-[10px] gap-0.5">
+                                                    OpenAlex
+                                                </a>
+                                            </div>
+                                        </div>
+                                        ${cw.inLibraryCollection ? `
+                                            <div class="flex items-center gap-1.5 text-success font-medium text-[10px] mt-0.5">
+                                                <svg class="w-3 h-3 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                                                <span>Im Bibliotheksbestand vorhanden</span>
+                                                ${cw.almaCallNumber ? `<span class="badge badge-xs badge-success badge-outline">${escapeHtml(cw.almaCallNumber)}</span>` : ''}
+                                                ${cw.almaLibrary ? `<span class="text-base-content/60">(${escapeHtml(cw.almaLibrary)})</span>` : ''}
+                                                ${cw.almaSwisscoveryUrl ? `
+                                                    <a href="${cw.almaSwisscoveryUrl}" target="_blank" rel="noopener noreferrer" class="text-primary hover:underline ml-auto print:hidden">Swisscovery</a>
+                                                ` : ''}
+                                            </div>
+                                        ` : ''}
+                                    </div>
                                 `).join('')}
                             </div>
                         </div>
