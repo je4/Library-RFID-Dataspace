@@ -12,7 +12,7 @@ import (
 )
 
 func TestDataspaceService_Empty(t *testing.T) {
-	svc := newDataspaceService(nil, nil, nil)
+	svc := newDataspaceService(nil, nil, nil, nil, nil)
 	resp, err := svc.GenerateMermaid(context.Background(), nil, "TD")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -69,7 +69,7 @@ func TestDataspaceService_SingleBook(t *testing.T) {
 		}, nil
 	}
 
-	svc := newDataspaceService(mockSearch, mockInk, nil)
+	svc := newDataspaceService(mockSearch, nil, mockInk, nil, nil)
 	resp, err := svc.GenerateMermaid(context.Background(), []string{"0001847294"}, "TD")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -285,7 +285,7 @@ func TestDataspaceService_OpenAlexDirectMatching(t *testing.T) {
 		}, nil
 	}
 
-	svc := newDataspaceService(mockSearch, nil, mockOpenAlex)
+	svc := newDataspaceService(mockSearch, nil, nil, mockOpenAlex, nil)
 	resp, err := svc.GenerateMermaid(context.Background(), []string{"0001847294"}, "TD")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -347,7 +347,7 @@ func TestDataspaceService_MultiBook(t *testing.T) {
 		}
 	}
 
-	svc := newDataspaceService(mockSearch, nil, nil)
+	svc := newDataspaceService(mockSearch, nil, nil, nil, nil)
 	resp, err := svc.GenerateMermaid(context.Background(), []string{"BC-01", "BC-02"}, "LR")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -508,7 +508,7 @@ func TestDataspaceService_Report(t *testing.T) {
 		return nil, nil
 	}
 
-	svc := newDataspaceService(mockSearch, mockInk, mockOpenAlex)
+	svc := newDataspaceService(mockSearch, nil, mockInk, mockOpenAlex, nil)
 	report, err := svc.GenerateReport(context.Background(), []string{"BC-01", "BC-02"})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -698,5 +698,247 @@ func TestCatalogExtractionHelpers(t *testing.T) {
 	topics := extractCatalogTopics(book)
 	if len(topics) != 1 || topics[0].Label != "Quantum theory" || topics[0].Identifier != "(DE-588)4047992-4" {
 		t.Errorf("unexpected topics: %+v", topics)
+	}
+}
+
+func TestDataspaceService_CitedBy_Phases1To3(t *testing.T) {
+	mockSearch := func(_ context.Context, barcode string) ([]catalog.Book, error) {
+		switch barcode {
+		case "BC-CITE-1":
+			return []catalog.Book{
+				{
+					Titles: []catalog.Title{{Title: "Electrodynamics of Moving Bodies"}},
+					PersonalNames: []map[string]catalog.Name{
+						{"aut": {NamePart: "Einstein, Albert"}},
+					},
+				},
+			}, nil
+		case "BC-CITE-2":
+			return []catalog.Book{
+				{
+					Titles: []catalog.Title{{Title: "Electric Waves"}},
+					PersonalNames: []map[string]catalog.Name{
+						{"aut": {NamePart: "Hertz, Heinrich"}},
+					},
+				},
+			}, nil
+		}
+		return nil, nil
+	}
+
+	mockOpenAlex := func(_ context.Context, isbns []string, title string, authors []string, dois []string) ([]OpenAlexWork, error) {
+		if strings.Contains(title, "Electrodynamics") {
+			return []OpenAlexWork{
+				{
+					ID:              "https://openalex.org/W1001",
+					DisplayName:     "Zur Elektrodynamik bewegter Körper",
+					PublicationYear: 1905,
+					CitedByCount:    4500,
+					ReferencedWorks: []string{"https://openalex.org/W2002"}, // References Hertz
+				},
+			}, nil
+		}
+		if strings.Contains(title, "Electric Waves") {
+			return []OpenAlexWork{
+				{
+					ID:              "https://openalex.org/W2002",
+					DisplayName:     "Untersuchungen über die Ausbreitung der elektrischen Kraft",
+					PublicationYear: 1892,
+					CitedByCount:    1200,
+				},
+			}, nil
+		}
+		return nil, nil
+	}
+
+	mockCitingSearch := func(_ context.Context, workID string, limit int) ([]OpenAlexWork, error) {
+		if strings.Contains(workID, "W2002") {
+			return []OpenAlexWork{
+				{
+					ID:              "https://openalex.org/W3003",
+					DisplayName:     "Experimental Foundations of Quantum Optics",
+					PublicationYear: 1980,
+					CitedByCount:    350,
+				},
+			}, nil
+		}
+		return nil, nil
+	}
+
+	svc := newDataspaceService(mockSearch, nil, nil, mockOpenAlex, mockCitingSearch)
+
+	// 1. Test Graph Generation
+	resp, err := svc.GenerateMermaid(context.Background(), []string{"BC-CITE-1", "BC-CITE-2"}, "TD")
+	if err != nil {
+		t.Fatalf("graph generation failed: %v", err)
+	}
+
+	// Verify Phase 1: Citation count badge in node & tooltip
+	if !strings.Contains(resp.Mermaid, "[4500 Citations]") {
+		t.Errorf("expected citation count badge in graph, got: %s", resp.Mermaid)
+	}
+	if !strings.Contains(resp.Mermaid, "4500 Citations") {
+		t.Errorf("expected citation count in tooltip, got: %s", resp.Mermaid)
+	}
+
+	// Verify Phase 2: Direct citation edge from W1001 to W2002
+	if !strings.Contains(resp.Mermaid, "==>|\"CITES WORK\"|") {
+		t.Errorf("expected CITES WORK edge between scanned items, got: %s", resp.Mermaid)
+	}
+
+	// Verify Phase 3: Citing work node and incoming citation edge
+	if !strings.Contains(resp.Mermaid, "Cited in: Experimental Foundations") {
+		t.Errorf("expected citing work node, got: %s", resp.Mermaid)
+	}
+	if !strings.Contains(resp.Mermaid, "==>|\"CITES\"|") {
+		t.Errorf("expected CITES edge from citing work node, got: %s", resp.Mermaid)
+	}
+
+	// 2. Test Report Generation
+	report, err := svc.GenerateReport(context.Background(), []string{"BC-CITE-1", "BC-CITE-2"})
+	if err != nil {
+		t.Fatalf("report generation failed: %v", err)
+	}
+
+	// Phase 1 verification in report
+	if report.Summary.TotalCitations != 5700 {
+		t.Errorf("expected total citations 5700, got %d", report.Summary.TotalCitations)
+	}
+	if len(report.Items[0].OpenAlexWorks) == 0 || report.Items[0].OpenAlexWorks[0].CitedByCount != 4500 {
+		t.Errorf("expected item 0 CitedByCount 4500")
+	}
+	if !strings.Contains(report.Items[0].OpenAlexWorks[0].CitedByURL, "filter=cites:W1001") {
+		t.Errorf("expected filter=cites:W1001 in CitedByURL, got: %s", report.Items[0].OpenAlexWorks[0].CitedByURL)
+	}
+
+	// Phase 2 verification in report: SharedLinks includes Cites Work
+	foundCiteLink := false
+	for _, link := range report.SharedLinks {
+		if link.RelationType == "Cites Work" {
+			foundCiteLink = true
+			break
+		}
+	}
+	if !foundCiteLink {
+		t.Errorf("expected Cites Work relation in report SharedLinks, got: %+v", report.SharedLinks)
+	}
+
+	// Phase 3 verification in report: CitingWorks populated
+	if len(report.Items[1].OpenAlexWorks) == 0 || len(report.Items[1].OpenAlexWorks[0].CitingWorks) == 0 {
+		t.Errorf("expected citing works populated on item 1")
+	} else {
+		cw := report.Items[1].OpenAlexWorks[0].CitingWorks[0]
+		if cw.DisplayName != "Experimental Foundations of Quantum Optics" {
+			t.Errorf("unexpected citing work title: %s", cw.DisplayName)
+		}
+		if cw.CitedByCount != 350 {
+			t.Errorf("unexpected citing work cited_by_count: %d", cw.CitedByCount)
+		}
+	}
+}
+
+func TestDataspaceService_AlmaReverseMatchForCitingWorks(t *testing.T) {
+	mockSearch := func(_ context.Context, barcode string) ([]catalog.Book, error) {
+		return []catalog.Book{
+			{
+				ID:     "oai:alma.41SLSP_FNW:99001",
+				Titles: []catalog.Title{{Title: "Principles of Optics"}},
+				PersonalNames: []map[string]catalog.Name{
+					{"aut": {NamePart: "Born, Max"}},
+				},
+			},
+		}, nil
+	}
+
+	mockOpenAlex := func(_ context.Context, isbns []string, title string, authors []string, dois []string) ([]OpenAlexWork, error) {
+		return []OpenAlexWork{
+			{
+				ID:              "https://openalex.org/W100",
+				DisplayName:     "Principles of Optics",
+				PublicationYear: 1959,
+				CitedByCount:    10000,
+			},
+		}, nil
+	}
+
+	mockCitingSearch := func(_ context.Context, workID string, limit int) ([]OpenAlexWork, error) {
+		return []OpenAlexWork{
+			{
+				ID:              "https://openalex.org/W200",
+				DOI:             "https://doi.org/10.1000/182",
+				DisplayName:     "Quantum Theory of Optical Coherence",
+				PublicationYear: 1963,
+				CitedByCount:    3200,
+				Authorships: []OpenAlexAuthorship{
+					{Author: OpenAlexAuthorRef{DisplayName: "Roy J. Glauber"}},
+				},
+			},
+		}, nil
+	}
+
+	mockAlmaWorkSearch := func(_ context.Context, dois []string, isbns []string, title string, authors []string) ([]catalog.Book, error) {
+		if strings.Contains(title, "Optical Coherence") || (len(dois) > 0 && strings.Contains(dois[0], "10.1000/182")) {
+			return []catalog.Book{
+				{
+					ID:     "oai:alma.41SLSP_FNW:9900223344",
+					Titles: []catalog.Title{{Title: "Quantum Theory of Optical Coherence"}},
+					Holdings: []catalog.Holding{
+						{
+							Library:    "FHNW Campus Muttenz",
+							CallNumber: "535.2 GLA",
+						},
+					},
+				},
+			}, nil
+		}
+		return nil, nil
+	}
+
+	svc := newDataspaceService(mockSearch, mockAlmaWorkSearch, nil, mockOpenAlex, mockCitingSearch)
+
+	// 1. Verify Graph Generation with Alma Citing node
+	graphResp, err := svc.GenerateMermaid(context.Background(), []string{"0001"}, "TD")
+	if err != nil {
+		t.Fatalf("graph generation failed: %v", err)
+	}
+
+	if !strings.Contains(graphResp.Mermaid, "[Alma: 535.2 GLA]") {
+		t.Errorf("expected [Alma: 535.2 GLA] in citing work label, got: %s", graphResp.Mermaid)
+	}
+	if !strings.Contains(graphResp.Mermaid, "Library Inventory: Quantum Theory") {
+		t.Errorf("expected Library Inventory node in graph, got: %s", graphResp.Mermaid)
+	}
+	if !strings.Contains(graphResp.Mermaid, "-.->|\"in library catalog\"|") {
+		t.Errorf("expected 'in library catalog' edge in graph, got: %s", graphResp.Mermaid)
+	}
+	if !strings.Contains(graphResp.Mermaid, "https://swisscovery.ch/discovery/search?query=any,contains,9900223344") {
+		t.Errorf("expected Swisscovery link for citing work in graph, got: %s", graphResp.Mermaid)
+	}
+
+	// 2. Verify Report Generation with InLibraryCollection and Alma metadata
+	reportResp, err := svc.GenerateReport(context.Background(), []string{"0001"})
+	if err != nil {
+		t.Fatalf("report generation failed: %v", err)
+	}
+
+	if len(reportResp.Items) != 1 || len(reportResp.Items[0].OpenAlexWorks) != 1 || len(reportResp.Items[0].OpenAlexWorks[0].CitingWorks) != 1 {
+		t.Fatalf("expected 1 citing work in report")
+	}
+
+	cwRep := reportResp.Items[0].OpenAlexWorks[0].CitingWorks[0]
+	if !cwRep.InLibraryCollection {
+		t.Errorf("expected InLibraryCollection to be true")
+	}
+	if cwRep.AlmaMMSID != "9900223344" {
+		t.Errorf("expected AlmaMMSID 9900223344, got %s", cwRep.AlmaMMSID)
+	}
+	if cwRep.AlmaCallNumber != "535.2 GLA" {
+		t.Errorf("expected AlmaCallNumber '535.2 GLA', got %s", cwRep.AlmaCallNumber)
+	}
+	if cwRep.AlmaLibrary != "FHNW Campus Muttenz" {
+		t.Errorf("expected AlmaLibrary 'FHNW Campus Muttenz', got %s", cwRep.AlmaLibrary)
+	}
+	if !strings.Contains(cwRep.AlmaSwisscoveryURL, "9900223344") {
+		t.Errorf("expected AlmaSwisscoveryURL with MMS-ID, got %s", cwRep.AlmaSwisscoveryURL)
 	}
 }

@@ -126,6 +126,7 @@ func TestSearchOpenAlexWorks(t *testing.T) {
 							"doi": "https://doi.org/10.1002/phbl.19970530707",
 							"display_name": "Heinrich Hertz und die elektromagnetischen Wellen",
 							"publication_year": 1997,
+							"cited_by_count": 142,
 							"type": "article",
 							"authorships": [
 								{
@@ -202,5 +203,119 @@ func TestSearchOpenAlexWorks(t *testing.T) {
 	}
 	if works[0].PrimaryTopic == nil || works[0].PrimaryTopic.ID != "https://openalex.org/T10123" {
 		t.Errorf("expected primary topic ID 'https://openalex.org/T10123'")
+	}
+	if works[0].CitedByCount != 142 {
+		t.Errorf("expected cited_by_count 142, got %d", works[0].CitedByCount)
+	}
+}
+
+func TestSearchOpenAlexCitingWorks(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("X-Elastic-Product", "Elasticsearch")
+		w.Header().Set("Content-Type", "application/json")
+		responseJSON := `{
+			"took": 4,
+			"timed_out": false,
+			"_shards": {"total": 1, "successful": 1, "skipped": 0, "failed": 0},
+			"hits": {
+				"total": {"value": 1, "relation": "eq"},
+				"max_score": 6.2,
+				"hits": [
+					{
+						"_index": "openalex-works",
+						"_id": "W99999",
+						"_score": 6.2,
+						"_source": {
+							"id": "https://openalex.org/W99999",
+							"doi": "https://doi.org/10.1000/182",
+							"display_name": "Advances in Quantum Electrodynamics",
+							"publication_year": 2021,
+							"cited_by_count": 88,
+							"referenced_works": ["https://openalex.org/W642892681"]
+						}
+					}
+				]
+			}
+		}`
+		_, _ = w.Write([]byte(responseJSON))
+	}))
+	defer server.Close()
+
+	client, err := newElasticClient(ElasticSearchConfig{
+		Endpoint: []string{server.URL},
+		APIKey:   "dummy",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	citingWorks, err := searchOpenAlexCitingWorks(context.Background(), client, "openalex-works", "https://openalex.org/W642892681", 3)
+	if err != nil {
+		t.Fatalf("unexpected search error: %v", err)
+	}
+
+	if len(citingWorks) != 1 {
+		t.Fatalf("expected 1 citing work, got %d", len(citingWorks))
+	}
+	if citingWorks[0].ID != "https://openalex.org/W99999" {
+		t.Errorf("expected ID 'https://openalex.org/W99999', got %q", citingWorks[0].ID)
+	}
+	if citingWorks[0].CitedByCount != 88 {
+		t.Errorf("expected CitedByCount 88, got %d", citingWorks[0].CitedByCount)
+	}
+}
+
+func TestSearchAlmaWorks(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("X-Elastic-Product", "Elasticsearch")
+		w.Header().Set("Content-Type", "application/json")
+		responseJSON := `{
+			"took": 2,
+			"timed_out": false,
+			"_shards": {"total": 1, "successful": 1, "skipped": 0, "failed": 0},
+			"hits": {
+				"total": {"value": 1, "relation": "eq"},
+				"max_score": 7.5,
+				"hits": [
+					{
+						"_index": "fhnw_alma-full",
+						"_id": "oai:alma.41SLSP_FNW:990049881560205518",
+						"_score": 7.5,
+						"_source": {
+							"id": "oai:alma.41SLSP_FNW:990049881560205518",
+							"titles": [{"title": "Advances in Quantum Electrodynamics"}],
+							"isbns": [{"enriched": "978-3-8171-3420-1"}],
+							"identifiers": ["doi:10.1000/182"],
+							"holdings": [{"library": "FHNW Campus Muttenz", "callNumber": "530.12 ADV"}]
+						}
+					}
+				]
+			}
+		}`
+		_, _ = w.Write([]byte(responseJSON))
+	}))
+	defer server.Close()
+
+	client, err := newElasticClient(ElasticSearchConfig{
+		Endpoint: []string{server.URL},
+		APIKey:   "dummy",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	books, err := searchAlmaWorks(context.Background(), client, "fhnw_alma-full", []string{"10.1000/182"}, []string{"978-3-8171-3420-1"}, "Advances in Quantum Electrodynamics", []string{"Author Name"})
+	if err != nil {
+		t.Fatalf("unexpected search error: %v", err)
+	}
+
+	if len(books) != 1 {
+		t.Fatalf("expected 1 book, got %d", len(books))
+	}
+	if books[0].ID != "oai:alma.41SLSP_FNW:990049881560205518" {
+		t.Errorf("expected ID 'oai:alma.41SLSP_FNW:990049881560205518', got %q", books[0].ID)
+	}
+	if len(books[0].Holdings) == 0 || books[0].Holdings[0].CallNumber != "530.12 ADV" {
+		t.Errorf("expected callNumber '530.12 ADV'")
 	}
 }

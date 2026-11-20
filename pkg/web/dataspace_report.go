@@ -56,6 +56,7 @@ func (s *dataspaceService) buildReport(ctx context.Context, cleanBarcodes []stri
 	catalogHits := 0
 	inkHits := 0
 	openAlexHits := 0
+	totalCitations := 0
 
 	for _, it := range items {
 		repItem := DataspaceReportItem{
@@ -131,6 +132,7 @@ func (s *dataspaceService) buildReport(ctx context.Context, cleanBarcodes []stri
 		// OpenAlex scholarly works matches
 		for _, oa := range it.openAlexWorks {
 			openAlexHits++
+			totalCitations += oa.CitedByCount
 			workTitle := oa.DisplayName
 			if workTitle == "" {
 				workTitle = oa.Title
@@ -143,11 +145,64 @@ func (s *dataspaceService) buildReport(ctx context.Context, cleanBarcodes []stri
 				PublicationYear: oa.PublicationYear,
 				Type:            oa.Type,
 				TypeURL:         buildOpenAlexTypeURL(oa.Type),
+				CitedByCount:    oa.CitedByCount,
+				CitedByURL:      buildOpenAlexCitingWorksURL(oa.ID),
 			}
 			if oa.DOI != "" {
 				doiClean := strings.TrimPrefix(oa.DOI, "https://doi.org/")
 				doiClean = strings.TrimPrefix(doiClean, "doi:")
 				oaRep.DOIURL = "https://doi.org/" + doiClean
+			}
+			if oa.AlmaBook != nil {
+				oaRep.InLibraryCollection = true
+				mmsID := oa.AlmaBook.ID
+				if idx := strings.LastIndex(mmsID, ":"); idx != -1 {
+					mmsID = mmsID[idx+1:]
+				}
+				oaRep.AlmaMMSID = mmsID
+				oaRep.AlmaCallNumber = extractBookCallNumber(oa.AlmaBook)
+				oaRep.AlmaSwisscoveryURL = buildSwisscoveryURL(oa.AlmaBook, workTitle)
+				if len(oa.AlmaBook.Holdings) > 0 {
+					oaRep.AlmaLibrary = oa.AlmaBook.Holdings[0].Library
+				}
+			}
+
+			// Citing Works
+			for _, cw := range oa.CitingWorks {
+				cwTitle := cw.DisplayName
+				if cwTitle == "" {
+					cwTitle = cw.Title
+				}
+				cwRep := OpenAlexWorkReport{
+					ID:              cw.ID,
+					WorkURL:         buildOpenAlexWorkURL(cw.ID, cw.DOI, "", cwTitle),
+					DOI:             cw.DOI,
+					DisplayName:     cwTitle,
+					PublicationYear: cw.PublicationYear,
+					Type:            cw.Type,
+					TypeURL:         buildOpenAlexTypeURL(cw.Type),
+					CitedByCount:    cw.CitedByCount,
+					CitedByURL:      buildOpenAlexCitingWorksURL(cw.ID),
+				}
+				if cw.DOI != "" {
+					doiClean := strings.TrimPrefix(cw.DOI, "https://doi.org/")
+					doiClean = strings.TrimPrefix(doiClean, "doi:")
+					cwRep.DOIURL = "https://doi.org/" + doiClean
+				}
+				if cw.AlmaBook != nil {
+					cwRep.InLibraryCollection = true
+					mmsID := cw.AlmaBook.ID
+					if idx := strings.LastIndex(mmsID, ":"); idx != -1 {
+						mmsID = mmsID[idx+1:]
+					}
+					cwRep.AlmaMMSID = mmsID
+					cwRep.AlmaCallNumber = extractBookCallNumber(cw.AlmaBook)
+					cwRep.AlmaSwisscoveryURL = buildSwisscoveryURL(cw.AlmaBook, cwTitle)
+					if len(cw.AlmaBook.Holdings) > 0 {
+						cwRep.AlmaLibrary = cw.AlmaBook.Holdings[0].Library
+					}
+				}
+				oaRep.CitingWorks = append(oaRep.CitingWorks, cwRep)
 			}
 
 			if oa.PrimaryLocation != nil && oa.PrimaryLocation.Source != nil {
@@ -240,6 +295,32 @@ func (s *dataspaceService) buildReport(ctx context.Context, cleanBarcodes []stri
 				itemA := reportItems[i]
 				itemB := reportItems[j]
 
+				// Check citation relationships between items
+				for _, oaA := range items[i].openAlexWorks {
+					for _, oaB := range items[j].openAlexWorks {
+						if isWorkReferenced(oaA.ReferencedWorks, oaB.ID) {
+							sharedLinks = append(sharedLinks, DataspaceReportLink{
+								SourceBarcode: itemA.Barcode,
+								SourceTitle:   itemA.Title,
+								TargetBarcode: itemB.Barcode,
+								TargetTitle:   itemB.Title,
+								RelationType:  "Cites Work",
+								Description:   itemA.Title + " zitiert " + itemB.Title,
+							})
+						}
+						if isWorkReferenced(oaB.ReferencedWorks, oaA.ID) {
+							sharedLinks = append(sharedLinks, DataspaceReportLink{
+								SourceBarcode: itemB.Barcode,
+								SourceTitle:   itemB.Title,
+								TargetBarcode: itemA.Barcode,
+								TargetTitle:   itemA.Title,
+								RelationType:  "Cites Work",
+								Description:   itemB.Title + " zitiert " + itemA.Title,
+							})
+						}
+					}
+				}
+
 				// Check shared authors
 				for _, a1 := range itemA.Authors {
 					for _, a2 := range itemB.Authors {
@@ -289,6 +370,7 @@ func (s *dataspaceService) buildReport(ctx context.Context, cleanBarcodes []stri
 			CatalogHits:      catalogHits,
 			InkHits:          inkHits,
 			OpenAlexHits:     openAlexHits,
+			TotalCitations:   totalCitations,
 			PrimaryDomains:   topDomains,
 			PrimaryFields:    topFields,
 			ProminentAuthors: prominentAuthors,

@@ -161,6 +161,14 @@ func buildOpenAlexWorkURL(workID, doi, isbn, title string) string {
 	return "https://openalex.org/works"
 }
 
+// buildOpenAlexCitingWorksURL generates a direct URL to the OpenAlex list of works citing the given work ID.
+func buildOpenAlexCitingWorksURL(workID string) string {
+	if id := cleanEntityID(workID, "works"); id != "" && (strings.HasPrefix(id, "W") || len(id) > 2) {
+		return fmt.Sprintf("https://openalex.org/works?filter=cites:%s", id)
+	}
+	return "https://openalex.org/works"
+}
+
 // buildOpenAlexAuthorURL generates an author profile URL (OpenAlex or ORCID) and an informative tooltip.
 func buildOpenAlexAuthorURL(authorID, orcid, name string) (urlStr string, tooltip string) {
 	if id := cleanEntityID(authorID, "authors"); id != "" && (strings.HasPrefix(id, "A") || len(id) > 2) {

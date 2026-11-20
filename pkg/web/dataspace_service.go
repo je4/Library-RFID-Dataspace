@@ -16,25 +16,31 @@ import (
 // metadata from Alma library catalog, digital repository items from Mediathek InK,
 // and scholarly citation / taxonomy data from OpenAlex.
 type dataspaceService struct {
-	catalogSearch  func(context.Context, string) ([]catalog.Book, error)
-	inkSearch      InkSearchFunc
-	openAlexSearch OpenAlexSearchFunc
-	graphCache     *otter.Cache[string, DataspaceGraphResponse]
-	graphLoader    funcCacheLoader[string, DataspaceGraphResponse]
-	reportCache    *otter.Cache[string, DataspaceReportResponse]
-	reportLoader   funcCacheLoader[string, DataspaceReportResponse]
+	catalogSearch        func(context.Context, string) ([]catalog.Book, error)
+	catalogWorkSearch    CatalogWorkSearchFunc
+	inkSearch            InkSearchFunc
+	openAlexSearch       OpenAlexSearchFunc
+	openAlexCitingSearch OpenAlexCitingSearchFunc
+	graphCache           *otter.Cache[string, DataspaceGraphResponse]
+	graphLoader          funcCacheLoader[string, DataspaceGraphResponse]
+	reportCache          *otter.Cache[string, DataspaceReportResponse]
+	reportLoader         funcCacheLoader[string, DataspaceReportResponse]
 }
 
 // newDataspaceService initializes and configures the dataspace service with caching.
 func newDataspaceService(
 	catalogSearch func(context.Context, string) ([]catalog.Book, error),
+	catalogWorkSearch CatalogWorkSearchFunc,
 	inkSearch InkSearchFunc,
 	openAlexSearch OpenAlexSearchFunc,
+	openAlexCitingSearch OpenAlexCitingSearchFunc,
 ) *dataspaceService {
 	svc := &dataspaceService{
-		catalogSearch:  catalogSearch,
-		inkSearch:      inkSearch,
-		openAlexSearch: openAlexSearch,
+		catalogSearch:        catalogSearch,
+		catalogWorkSearch:    catalogWorkSearch,
+		inkSearch:            inkSearch,
+		openAlexSearch:       openAlexSearch,
+		openAlexCitingSearch: openAlexCitingSearch,
 		graphCache: otter.Must(&otter.Options[string, DataspaceGraphResponse]{
 			MaximumSize:      2000,
 			ExpiryCalculator: otter.ExpiryWriting[string, DataspaceGraphResponse](5 * time.Minute),
@@ -109,6 +115,43 @@ func (s *dataspaceService) resolveDataspaceData(ctx context.Context, cleanBarcod
 		if s.openAlexSearch != nil && (len(isbns) > 0 || title != "" || len(authors) > 0 || len(dois) > 0) {
 			oaWorks, err := s.openAlexSearch(ctx, isbns, title, authors, dois)
 			if err == nil && len(oaWorks) > 0 {
+				if s.openAlexCitingSearch != nil {
+					for i := range oaWorks {
+						if oaWorks[i].ID != "" {
+							citingWorks, cErr := s.openAlexCitingSearch(ctx, oaWorks[i].ID, 3)
+							if cErr == nil && len(citingWorks) > 0 {
+								oaWorks[i].CitingWorks = citingWorks
+							}
+						}
+					}
+				}
+				if s.catalogWorkSearch != nil {
+					for i := range oaWorks {
+						for j := range oaWorks[i].CitingWorks {
+							cw := &oaWorks[i].CitingWorks[j]
+							var cwDOIs []string
+							if cw.DOI != "" {
+								cwDOIs = append(cwDOIs, cw.DOI)
+							}
+							cwTitle := cw.DisplayName
+							if cwTitle == "" {
+								cwTitle = cw.Title
+							}
+							var cwAuthors []string
+							for _, auth := range cw.Authorships {
+								if auth.Author.DisplayName != "" {
+									cwAuthors = append(cwAuthors, auth.Author.DisplayName)
+								}
+							}
+							if len(cwDOIs) > 0 || cwTitle != "" || len(cwAuthors) > 0 {
+								almaBooks, aErr := s.catalogWorkSearch(ctx, cwDOIs, nil, cwTitle, cwAuthors)
+								if aErr == nil && len(almaBooks) > 0 {
+									cw.AlmaBook = &almaBooks[0]
+								}
+							}
+						}
+					}
+				}
 				itCtx.openAlexWorks = oaWorks
 			}
 		}

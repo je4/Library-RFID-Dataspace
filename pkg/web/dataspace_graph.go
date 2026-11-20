@@ -84,11 +84,13 @@ func (s *dataspaceService) buildGraph(ctx context.Context, cleanBarcodes []strin
 
 	// Helper to track works across books for citation/overlap linking
 	type workRef struct {
-		bookIdx int
-		workID  string
-		title   string
-		authors []string
-		topics  []string
+		bookIdx         int
+		workID          string
+		title           string
+		rawWorkID       string
+		referencedWorks []string
+		authors         []string
+		topics          []string
 	}
 	var discoveredWorks []workRef
 
@@ -201,11 +203,66 @@ func (s *dataspaceService) buildGraph(ctx context.Context, cleanBarcodes []strin
 				if oaWork.PublicationYear > 0 {
 					oaLabel += fmt.Sprintf("<br/>(%d)", oaWork.PublicationYear)
 				}
+				if oaWork.CitedByCount > 0 {
+					oaLabel += fmt.Sprintf("<br/>[%d Citations]", oaWork.CitedByCount)
+				}
 				oaWorkURL := buildOpenAlexWorkURL(oaWork.ID, oaWork.DOI, isbnStr, oaTitle)
 
+				workTooltip := fmt.Sprintf("OpenAlex Work: %s", oaTitle)
+				if oaWork.CitedByCount > 0 {
+					workTooltip = fmt.Sprintf("OpenAlex Work: %s (%d Citations)", oaTitle, oaWork.CitedByCount)
+				}
 				addNode(&scholarlyNodes, oaWorkNodeID, fmt.Sprintf("        %s[\"%s\"]:::nodeWork", oaWorkNodeID, sanitizeMermaidLabel(oaLabel)))
-				addClick(oaWorkNodeID, oaWorkURL, fmt.Sprintf("OpenAlex Work: %s", oaTitle))
+				addClick(oaWorkNodeID, oaWorkURL, workTooltip)
 				addEdge(almaNodeID, "-.->", "matches work", oaWorkNodeID)
+
+				// Citing Works (Phase 3: Top citing works in OpenAlex + Alma Reverse Match)
+				if len(oaWork.CitingWorks) > 0 {
+					for k, cw := range oaWork.CitingWorks {
+						if k >= 2 {
+							break
+						}
+						cwTitle := cw.DisplayName
+						if cwTitle == "" {
+							cwTitle = cw.Title
+						}
+						if cwTitle == "" {
+							cwTitle = "Citing Publication"
+						}
+						citingNodeID := fmt.Sprintf("Citing_%d_%d_%d", i+1, j+1, k+1)
+						citingLabel := fmt.Sprintf("Cited in: %s", truncateText(cwTitle, 30))
+						if cw.PublicationYear > 0 {
+							citingLabel += fmt.Sprintf("<br/>(%d)", cw.PublicationYear)
+						}
+						if cw.AlmaBook != nil {
+							callNum := extractBookCallNumber(cw.AlmaBook)
+							if callNum != "" {
+								citingLabel += fmt.Sprintf("<br/>[Alma: %s]", callNum)
+							} else {
+								citingLabel += "<br/>[In Alma Catalog]"
+							}
+						}
+						addNode(&scholarlyNodes, citingNodeID, fmt.Sprintf("        %s[\"%s\"]:::nodeWork", citingNodeID, sanitizeMermaidLabel(citingLabel)))
+						addClick(citingNodeID, buildOpenAlexWorkURL(cw.ID, cw.DOI, "", cwTitle), fmt.Sprintf("Citing Work: %s", cwTitle))
+						addEdge(citingNodeID, "==>", "CITES", oaWorkNodeID)
+
+						if cw.AlmaBook != nil {
+							almaCitingNodeID := fmt.Sprintf("AlmaCiting_%d_%d_%d", i+1, j+1, k+1)
+							almaCitingLabel := fmt.Sprintf("Library Inventory: %s", truncateText(cwTitle, 28))
+							callNum := extractBookCallNumber(cw.AlmaBook)
+							if callNum != "" {
+								almaCitingLabel += fmt.Sprintf("<br/>[%s]", callNum)
+							}
+							if len(cw.AlmaBook.Holdings) > 0 && cw.AlmaBook.Holdings[0].Library != "" {
+								almaCitingLabel += fmt.Sprintf("<br/>(%s)", truncateText(cw.AlmaBook.Holdings[0].Library, 24))
+							}
+							swissURL := buildSwisscoveryURL(cw.AlmaBook, cwTitle)
+							addNode(&physicalNodes, almaCitingNodeID, fmt.Sprintf("        %s[\"%s\"]:::nodeAlma", almaCitingNodeID, sanitizeMermaidLabel(almaCitingLabel)))
+							addClick(almaCitingNodeID, swissURL, fmt.Sprintf("Swisscovery Catalog: %s", cwTitle))
+							addEdge(citingNodeID, "-.->", "in library catalog", almaCitingNodeID)
+						}
+					}
+				}
 
 				// OpenAlex Authors & Affiliations
 				for _, authorship := range oaWork.Authorships {
@@ -346,11 +403,13 @@ func (s *dataspaceService) buildGraph(ctx context.Context, cleanBarcodes []strin
 				}
 
 				discoveredWorks = append(discoveredWorks, workRef{
-					bookIdx: i,
-					workID:  oaWorkNodeID,
-					title:   oaTitle,
-					authors: bookAuthors,
-					topics:  bookTopics,
+					bookIdx:         i,
+					workID:          oaWorkNodeID,
+					title:           oaTitle,
+					rawWorkID:       oaWork.ID,
+					referencedWorks: oaWork.ReferencedWorks,
+					authors:         bookAuthors,
+					topics:          bookTopics,
 				})
 			}
 		} else {
@@ -465,6 +524,17 @@ func (s *dataspaceService) buildGraph(ctx context.Context, cleanBarcodes []strin
 				w1 := discoveredWorks[i]
 				w2 := discoveredWorks[j]
 
+				// Phase 2: Check direct citation relationships between scanned items
+				citesDirect := false
+				if isWorkReferenced(w1.referencedWorks, w2.rawWorkID) {
+					addEdge(w1.workID, "==>", "CITES WORK", w2.workID)
+					citesDirect = true
+				}
+				if isWorkReferenced(w2.referencedWorks, w1.rawWorkID) {
+					addEdge(w2.workID, "==>", "CITES WORK", w1.workID)
+					citesDirect = true
+				}
+
 				// Check shared authors
 				for _, a1 := range w1.authors {
 					for _, a2 := range w2.authors {
@@ -485,7 +555,7 @@ func (s *dataspaceService) buildGraph(ctx context.Context, cleanBarcodes []strin
 					}
 				}
 
-				if i == 0 && j == 1 {
+				if !citesDirect && i == 0 && j == 1 {
 					addEdge(w1.workID, "==>", "RELATED WORK", w2.workID)
 				}
 			}
@@ -560,4 +630,21 @@ func (s *dataspaceService) buildGraph(ctx context.Context, cleanBarcodes []strin
 	}
 
 	return resp, nil
+}
+
+// isWorkReferenced tests whether targetID is referenced in the list of referenced works.
+func isWorkReferenced(referenced []string, targetID string) bool {
+	if targetID == "" || len(referenced) == 0 {
+		return false
+	}
+	cleanTarget := cleanEntityID(targetID, "works")
+	if cleanTarget == "" {
+		return false
+	}
+	for _, ref := range referenced {
+		if cleanEntityID(ref, "works") == cleanTarget {
+			return true
+		}
+	}
+	return false
 }

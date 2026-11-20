@@ -69,6 +69,8 @@ type DataspaceSummaryStats struct {
 	InkHits int `json:"inkHits"`
 	// OpenAlexHits is the number of matched scholarly publications in OpenAlex.
 	OpenAlexHits int `json:"openAlexHits"`
+	// TotalCitations is the accumulated number of citations for all matched works.
+	TotalCitations int `json:"totalCitations"`
 	// PrimaryDomains lists the most frequent high-level research domains (e.g. "Physical Sciences").
 	PrimaryDomains []string `json:"primaryDomains"`
 	// PrimaryFields lists the most frequent research fields (e.g. "Computer Science", "Physics").
@@ -194,6 +196,10 @@ type OpenAlexWorkReport struct {
 	Type string `json:"type,omitempty"`
 	// TypeURL is the deep link to the type taxonomy in OpenAlex.
 	TypeURL string `json:"typeUrl,omitempty"`
+	// CitedByCount is the total number of citations recorded for this work in OpenAlex.
+	CitedByCount int `json:"citedByCount,omitempty"`
+	// CitedByURL is the deep link to all citing works in OpenAlex.
+	CitedByURL string `json:"citedByUrl,omitempty"`
 	// SourceName is the name of the hosting journal, book series, or repository.
 	SourceName string `json:"sourceName,omitempty"`
 	// SourceURL is the deep link to the hosting venue profile in OpenAlex.
@@ -208,6 +214,18 @@ type OpenAlexWorkReport struct {
 	SecondaryTopics []DataspaceTopicEntry `json:"secondaryTopics,omitempty"`
 	// Authorships lists the contributing authors and their affiliated academic institutions.
 	Authorships []OpenAlexAuthorshipItem `json:"authorships,omitempty"`
+	// CitingWorks contains the top citing works discovered in OpenAlex.
+	CitingWorks []OpenAlexWorkReport `json:"citingWorks,omitempty"`
+	// InLibraryCollection is true if this work was matched in the physical Alma library catalog.
+	InLibraryCollection bool `json:"inLibraryCollection,omitempty"`
+	// AlmaMMSID is the library system identifier in Alma if available.
+	AlmaMMSID string `json:"almaMmsId,omitempty"`
+	// AlmaCallNumber is the shelf mark / call number in the library collection.
+	AlmaCallNumber string `json:"almaCallNumber,omitempty"`
+	// AlmaSwisscoveryURL is the deep link to the work in the Swisscovery library network.
+	AlmaSwisscoveryURL string `json:"almaSwisscoveryUrl,omitempty"`
+	// AlmaLibrary is the library name or holding location where the item is shelved.
+	AlmaLibrary string `json:"almaLibrary,omitempty"`
 }
 
 // OpenAlexAuthorshipItem represents an authorship with affiliations for the report dossier.
@@ -293,6 +311,8 @@ type OpenAlexWork struct {
 	DisplayName     string               `json:"display_name,omitempty"`
 	PublicationYear int                  `json:"publication_year,omitempty"`
 	Type            string               `json:"type,omitempty"`
+	CitedByCount    int                  `json:"cited_by_count,omitempty"`
+	CitedByAPIURL   string               `json:"cited_by_api_url,omitempty"`
 	Authorships     []OpenAlexAuthorship `json:"authorships,omitempty"`
 	PrimaryTopic    *OpenAlexTopicRef    `json:"primary_topic,omitempty"`
 	Topics          []OpenAlexTopicRef   `json:"topics,omitempty"`
@@ -300,6 +320,8 @@ type OpenAlexWork struct {
 	Locations       []OpenAlexLocation   `json:"locations,omitempty"`
 	ReferencedWorks []string             `json:"referenced_works,omitempty"`
 	RelatedWorks    []string             `json:"related_works,omitempty"`
+	CitingWorks     []OpenAlexWork       `json:"citing_works,omitempty"`
+	AlmaBook        *catalog.Book        `json:"alma_book,omitempty"`
 }
 
 // OpenAlexAuthorship represents an authorship structure in OpenAlex.
@@ -354,6 +376,12 @@ type OpenAlexSourceRef struct {
 
 // OpenAlexSearchFunc searches the openalex-works index for matching scholarly records.
 type OpenAlexSearchFunc func(ctx context.Context, isbns []string, title string, authors []string, dois []string) ([]OpenAlexWork, error)
+
+// OpenAlexCitingSearchFunc searches the openalex-works index for works citing a specific work ID.
+type OpenAlexCitingSearchFunc func(ctx context.Context, workID string, limit int) ([]OpenAlexWork, error)
+
+// CatalogWorkSearchFunc searches the Alma catalog index for records matching an OpenAlex work (by DOIs, ISBNs, title, authors).
+type CatalogWorkSearchFunc func(ctx context.Context, dois []string, isbns []string, title string, authors []string) ([]catalog.Book, error)
 
 // dataspaceItemContext encapsulates all raw queried data for a single barcode.
 type dataspaceItemContext struct {

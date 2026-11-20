@@ -97,15 +97,31 @@ sequenceDiagram
             ES-->>Svc: Matched InkItems (Medien, Hochschularchiv-Einträge)
         end
 
-        %% Step 4: OpenAlex Query
+        %% Step 4: OpenAlex Query & Alma Reverse Matching
         rect rgb(245, 243, 255)
-            Note over Svc,ES: Phase 4: OpenAlex Knowledge Graph Suche (openalex-works)
+            Note over Svc,ES: Phase 4a: OpenAlex Knowledge Graph Suche (openalex-works)
             Svc->>ES: Bool Search (Should: [DOI match_phrase, ISBN match_phrase, Autor match_phrase, Titel match], Size: 5)
             ES-->>Svc: Matched OpenAlexWorks (Topics, Zitationen, Konzepte)
         end
 
+        rect rgb(238, 242, 255)
+            Note over Svc,ES: Phase 4b: OpenAlex Citing Works Reverse-Query (openalex-works)
+            loop Für jedes gematchte OpenAlexWork (WorkID)
+                Svc->>ES: Search(referenced_works.keyword: WorkID, sort: cited_by_count desc, size: 3)
+                ES-->>Svc: Top Citing Publications (Zitierende Nachfolgewerke)
+            end
+        end
+
+        rect rgb(240, 253, 244)
+            Note over Svc,ES: Phase 4c: Alma Reverse Lookup für zitierende Werke (fhnw_alma-full)
+            loop Für jedes zitierende Werk (DOI / ISBN / Titel / Autor)
+                Svc->>ES: Search(Index: fhnw_alma-full, Should: [DOI, ISBN, Titel, Autor], Size: 2)
+                ES-->>Svc: Matched catalog.Book (Bestand, Signatur, MMS-ID, Swisscovery)
+            end
+        end
+
         %% Step 5: Caching & Return
-        Note over Svc: Phase 5: Konsolidierung der Datenstrukturen
+        Note over Svc: Phase 5: Konsolidierung der Datenstrukturen & Graphensynthese
         Svc->>Cache: Speichere Ergebnis im Cache
         Svc-->>Caller: Vollständig angereicherte DataspaceItem-Struktur
     end
@@ -223,21 +239,93 @@ Ermittelt Zitationsdaten, Forschungsthemen (Topics), akademische Disziplinen und
 
 ---
 
+#### 3.4 OpenAlex Citing Works Reverse-Query (`openalex-works`)
+
+Ermittelt top-zitierende wissenschaftliche Publikationen (Nachfolgearbeiten), die das gefundene Werk in ihrem Literaturverzeichnis (`referenced_works`) führen.
+
+* **Funktion**: `searchOpenAlexCitingWorks(ctx, client, index, workID, limit)`
+* **Eigenschaften**:
+  * **Ziel-Index**: `openalex-works`.
+  * **Matching**: Exakter Term- und Phrase-Match auf `referenced_works` / `referenced_works.keyword` mit der normalisierten OpenAlex Work-ID (sowohl als URI `https://openalex.org/W...` als auch als Kurzform `W...`).
+  * **Sortierung**: Absteigend nach Zitationshäufigkeit (`cited_by_count: desc`), um die einflussreichsten Nachfolgearbeiten zuerst zu liefern.
+  * **Ergebnislimit (`Size`)**: Standardmässig `3` Treffer.
+
+```json
+{
+  "query": {
+    "bool": {
+      "should": [
+        { "term": { "referenced_works.keyword": "https://openalex.org/W642892681" } },
+        { "term": { "referenced_works.keyword": "W642892681" } },
+        { "match_phrase": { "referenced_works": "https://openalex.org/W642892681" } },
+        { "match_phrase": { "referenced_works": "W642892681" } }
+      ],
+      "minimum_should_match": "1"
+    }
+  },
+  "sort": [
+    {
+      "cited_by_count": {
+        "order": "desc"
+      }
+    }
+  ],
+  "size": 3
+}
+```
+
+---
+
+#### 3.5 Alma Reverse-Match für OpenAlex & Citing Works (`fhnw_alma-full`)
+
+Prüft für in OpenAlex gefundene zitierende Folgearbeiten oder Publikationen, ob diese physisch oder lizenziert im Bibliotheksbestand (`fhnw_alma-full`) vorhanden sind.
+
+* **Funktion**: `searchAlmaWorks(ctx, client, index, dois, isbns, title, authors)`
+* **Eigenschaften**:
+  * **Ziel-Index**: `fhnw_alma-full`.
+  * **Disjunktive Suchkriterien (`should`)**:
+    * **DOI**: Standardfeld `024.a`, `mapping.recordIdentifier` und `search.identifier.keyword`.
+    * **ISBN**: MARC-Feld `020.a`, `mapping.identifier.isbn.id`, `mapping.identifier.isbn.enriched` sowie `search.identifier.keyword`.
+    * **Autor**: MARC-Felder `100.a`, `700.a` sowie `mapping.name.personal.aut.namePart`.
+    * **Titel**: `mapping.titleInfo.main.title` und MARC `245.a`.
+  * **Mindestübereinstimmung**: `minimum_should_match: "1"`.
+  * **Ergebnislimit (`Size`)**: `2` Treffer.
+  * **Verknüpfte Entitäten**: MMS-ID, Signatur (`callNumber`), Zweigbibliothek/Holding-Standort und Swisscovery-Discovery-Link.
+
+```json
+{
+  "query": {
+    "bool": {
+      "should": [
+        { "match_phrase": { "024.a": "10.1000/182" } },
+        { "match_phrase": { "search.identifier.keyword": "10.1000/182" } },
+        { "match_phrase": { "mapping.titleInfo.main.title": "Quantum Theory of Optical Coherence" } },
+        { "match_phrase": { "100.a": "Roy J. Glauber" } }
+      ],
+      "minimum_should_match": "1"
+    }
+  },
+  "size": 2
+}
+```
+
+---
+
 ### 4. Nicht-funktionale Eigenschaften & Abfrage-Matrix
 
 Die folgende Tabelle fasst alle technischen Eigenschaften und Leistungsparameter der Abfragen zusammen:
 
-| Eigenschaft / Parameter | Alma Katalog (`fhnw_alma-full`) | Mediathek InK (`fhnw_ink`) | OpenAlex (`openalex-works`) |
-| :--- | :--- | :--- | :--- |
-| **Abfragetyp** | Exact Match / Identifier Lookup | Filtered Multi-field Bool Query | Weighted Multi-identifier Bool Query |
-| **Primäre Matching-Keys** | Barcode / Identifier | Barcode, Signatur, ISBN, Autor, Titel | DOI, ISBN, Titel, Autor |
-| **Sicherheitsfilter (ACL)** | Keine (Öffentlicher Katalog) | `acl.meta.keyword: "global/guest"` | Keine (Open Access Metadaten) |
-| **Max. Trefferanzahl (`Size`)**| 1 | 4 | 5 |
-| **In-Memory Caching** | 15 Minuten (`otter.Cache`) | 5 Minuten (als Teil des Graphen/Reports) | 5 Minuten (als Teil des Graphen/Reports) |
-| **Cache Kapazität** | 10'000 Einträge | 2'000 Einträge | 2'000 Einträge |
-| **Client Context Timeout** | 10 Sekunden | 10 Sekunden | 10 Sekunden |
-| **Client Retry-Strategie** | 5 Retries bei `502, 503, 504, 429` | 5 Retries bei `502, 503, 504, 429` | 5 Retries bei `502, 503, 504, 429` |
-| **Fehlerbehandlung** | Graceful Fallback (`hasCatalog = false`) | Graceful Fallback (Leere Trefferliste) | Graceful Fallback (Leere Trefferliste) |
+| Eigenschaft / Parameter | Alma Katalog (`fhnw_alma-full`) | Mediathek InK (`fhnw_ink`) | OpenAlex Works (`openalex-works`) | OpenAlex Citing Reverse (`openalex-works`) | Alma Reverse Match (`fhnw_alma-full`) |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| **Abfragetyp** | Exact Match / Identifier Lookup | Filtered Multi-field Bool Query | Weighted Multi-identifier Bool Query | Reverse Reference Lookup + Sort | Multi-identifier Bool Query |
+| **Primäre Matching-Keys** | Barcode / Identifier | Barcode, Signatur, ISBN, Autor, Titel | DOI, ISBN, Titel, Autor | Work ID in `referenced_works` | DOI, ISBN, Titel, Autor |
+| **Sicherheitsfilter (ACL)** | Keine (Öffentlicher Katalog) | `acl.meta.keyword: "global/guest"` | Keine (Open Access Metadaten) | Keine (Open Access Metadaten) | Keine (Öffentlicher Katalog) |
+| **Max. Trefferanzahl (`Size`)**| 1 | 4 | 5 | 3 | 2 |
+| **In-Memory Caching** | 15 Minuten (`otter.Cache`) | 5 Minuten (als Teil des Graphen/Reports) | 5 Minuten (als Teil des Graphen/Reports) | 5 Minuten (als Teil des Graphen/Reports) | 5 Minuten (als Teil des Graphen/Reports) |
+| **Cache Kapazität** | 10'000 Einträge | 2'000 Einträge | 2'000 Einträge | 2'000 Einträge | 2'000 Einträge |
+| **Client Context Timeout** | 10 Sekunden | 10 Sekunden | 10 Sekunden | 10 Sekunden | 10 Sekunden |
+| **Client Retry-Strategie** | 5 Retries bei `502, 503, 504, 429` | 5 Retries bei `502, 503, 504, 429` | 5 Retries bei `502, 503, 504, 429` | 5 Retries bei `502, 503, 504, 429` | 5 Retries bei `502, 503, 504, 429` |
+| **Fehlerbehandlung** | Graceful Fallback (`hasCatalog = false`) | Graceful Fallback (Leere Trefferliste) | Graceful Fallback (Leere Trefferliste) | Graceful Fallback (Leere Trefferliste) | Graceful Fallback (Leere Trefferliste) |
 
 ---
 

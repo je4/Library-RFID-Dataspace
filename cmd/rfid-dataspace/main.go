@@ -41,11 +41,16 @@ func main() {
 		logger.Fatal().Err(err).Msg("cannot initialize Elasticsearch client")
 	}
 	var catalogSearch func(context.Context, string) ([]catalog.Book, error)
+	var catalogWorkSearch web.CatalogWorkSearchFunc
 	var inkSearch web.InkSearchFunc
 	var openAlexSearch web.OpenAlexSearchFunc
+	var openAlexCitingSearch web.OpenAlexCitingSearchFunc
 	if elasticClient != nil {
 		catalogSearch = func(ctx context.Context, barcode string) ([]catalog.Book, error) {
 			return catalog.SearchByBarcode(ctx, elasticClient, conf.ElasticSearch.Index, barcode)
+		}
+		catalogWorkSearch = func(ctx context.Context, dois []string, isbns []string, title string, authors []string) ([]catalog.Book, error) {
+			return searchAlmaWorks(ctx, elasticClient, conf.ElasticSearch.Index, dois, isbns, title, authors)
 		}
 		inkIndex := conf.ElasticSearch.InkIndex
 		if inkIndex == "" {
@@ -60,6 +65,9 @@ func main() {
 		}
 		openAlexSearch = func(ctx context.Context, isbns []string, title string, authors []string, dois []string) ([]web.OpenAlexWork, error) {
 			return searchOpenAlexWorks(ctx, elasticClient, openAlexWorksIndex, isbns, title, authors, dois)
+		}
+		openAlexCitingSearch = func(ctx context.Context, workID string, limit int) ([]web.OpenAlexWork, error) {
+			return searchOpenAlexCitingWorks(ctx, elasticClient, openAlexWorksIndex, workID, limit)
 		}
 	}
 
@@ -90,22 +98,24 @@ func main() {
 
 	// 4. Initialize Web Controller with embedded templates and assets
 	webCtrl, err := web.NewController(web.Config{
-		CatalogSearch:  catalogSearch,
-		InkSearch:      inkSearch,
-		OpenAlexSearch: openAlexSearch,
-		SourceRecords:  conf.SourceRecords,
-		Addr:           addr,
-		ExtAddr:        extAddr,
-		ClientName:     conf.Name,
-		WSBroker:       conf.WSBroker,
-		Channels:       conf.Channels,
-		DefaultISIL:    conf.DefaultISIL,
-		DefaultAFI:     conf.DefaultAFI,
-		ThemeLight:     conf.Themes.Light,
-		ThemeDark:      conf.Themes.Dark,
-		Hub:            hub,
-		ISILList:       isilList,
-		Logger:         logger,
+		CatalogSearch:        catalogSearch,
+		CatalogWorkSearch:    catalogWorkSearch,
+		InkSearch:            inkSearch,
+		OpenAlexSearch:       openAlexSearch,
+		OpenAlexCitingSearch: openAlexCitingSearch,
+		SourceRecords:        conf.SourceRecords,
+		Addr:                 addr,
+		ExtAddr:              extAddr,
+		ClientName:           conf.Name,
+		WSBroker:             conf.WSBroker,
+		Channels:             conf.Channels,
+		DefaultISIL:          conf.DefaultISIL,
+		DefaultAFI:           conf.DefaultAFI,
+		ThemeLight:           conf.Themes.Light,
+		ThemeDark:            conf.Themes.Dark,
+		Hub:                  hub,
+		ISILList:             isilList,
+		Logger:               logger,
 	})
 	if err != nil {
 		logger.Fatal().Err(err).Msg("cannot initialize web controller")
