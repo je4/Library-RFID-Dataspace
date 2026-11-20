@@ -1048,3 +1048,143 @@ func TestDataspaceService_CoCitationInReportAndGraph(t *testing.T) {
 		t.Errorf("expected Citing_W999 to cite OAWork_2_1, got: %s", graph.Mermaid)
 	}
 }
+
+func TestDataspaceReport_HTMLTemplateRendering(t *testing.T) {
+	mockSearch := func(_ context.Context, barcode string) ([]catalog.Book, error) {
+		return []catalog.Book{
+			{
+				ID: "oai:alma.41SLSP_FNW:990049881560205518",
+				Titles: []catalog.Title{
+					{Title: "Heinrich Hertz: Erinnerungen, Briefe, Tagebücher", SubTitle: "Dokumente zur Physik"},
+				},
+				ISBNs: []catalog.ISBN{
+					{Enriched: "978-3-8171-3420-1"},
+				},
+				PersonalNames: []map[string]catalog.Name{
+					{"aut": {NamePart: "Fölsing, Albrecht", Identifier: "(DE-588)118772295"}},
+				},
+				Holdings: []catalog.Holding{
+					{
+						Library:    "FHNW Campus Muttenz",
+						CallNumber: "530.092 HER",
+						Location:   "EG-104",
+					},
+				},
+				Subjects: catalog.Subject{
+					Topic: []map[string]catalog.SubjectTerm{
+						{"top": {Label: "Elektromagnetismus", Identifier: "(DE-588)4002851-3"}},
+					},
+				},
+			},
+		}, nil
+	}
+
+	mockInk := func(_ context.Context, barcode string, authors []string, title string, isbns []string) ([]InkItem, error) {
+		return []InkItem{
+			{
+				Signature:       "zotero2-2068924.UHBBY3JP",
+				Title:           "Classic Design – Future Design Classics",
+				Type:            "thesis",
+				CollectionTitle: "Archiv Institut Industrial Design",
+				Persons: []InkPerson{
+					{Name: "Fölsing, Albrecht", Role: "creator"},
+				},
+			},
+		}, nil
+	}
+
+	mockOpenAlex := func(_ context.Context, isbns []string, title string, authors []string, dois []string) ([]OpenAlexWork, error) {
+		return []OpenAlexWork{
+			{
+				ID:              "https://openalex.org/W642892681",
+				DisplayName:     "Heinrich Hertz: Erinnerungen, Briefe, Tagebücher",
+				PublicationYear: 1994,
+				Type:            "book",
+				CitedByCount:    42,
+				PrimaryTopic: &OpenAlexTopicRef{
+					DisplayName: "History of Physics",
+					Subfield:    &OpenAlexTaxonomyRef{DisplayName: "History and Philosophy of Science"},
+				},
+			},
+		}, nil
+	}
+
+	ctrl, _ := setupTestController(t)
+	ctrl.dataspaceService = newDataspaceService(mockSearch, nil, mockInk, mockOpenAlex, nil)
+
+	// 1. Test format=html query parameter
+	req := httptest.NewRequest(http.MethodGet, "/dataspace/report?format=html&barcodes=0001847294", nil)
+	w := httptest.NewRecorder()
+	ctrl.router.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected status 200, got %d", w.Code)
+	}
+
+	contentType := w.Header().Get("Content-Type")
+	if !strings.Contains(contentType, "text/html") {
+		t.Errorf("expected Content-Type text/html, got %s", contentType)
+	}
+
+	body := w.Body.String()
+	if !strings.Contains(body, "Heinrich Hertz") {
+		t.Errorf("expected 'Heinrich Hertz' in HTML report")
+	}
+	if !strings.Contains(body, "Fölsing, Albrecht") {
+		t.Errorf("expected 'Fölsing, Albrecht' in HTML report")
+	}
+	if !strings.Contains(body, "0001847294") {
+		t.Errorf("expected barcode '0001847294' in HTML report")
+	}
+	if !strings.Contains(body, "530.092 HER") {
+		t.Errorf("expected call number '530.092 HER' in HTML report")
+	}
+	if !strings.Contains(body, "Classic Design – Future Design Classics") {
+		t.Errorf("expected InK item title in HTML report")
+	}
+	if !strings.Contains(body, "History of Physics") {
+		t.Errorf("expected OpenAlex primary topic in HTML report")
+	}
+
+	// 2. Test Accept: text/html header
+	reqAccept := httptest.NewRequest(http.MethodGet, "/dataspace/report?barcodes=0001847294", nil)
+	reqAccept.Header.Set("Accept", "text/html")
+	wAccept := httptest.NewRecorder()
+	ctrl.router.ServeHTTP(wAccept, reqAccept)
+
+	if wAccept.Code != http.StatusOK {
+		t.Fatalf("expected status 200, got %d", wAccept.Code)
+	}
+	if !strings.Contains(wAccept.Header().Get("Content-Type"), "text/html") {
+		t.Errorf("expected Content-Type text/html for Accept header request")
+	}
+
+	// 3. Test Empty report HTML
+	reqEmpty := httptest.NewRequest(http.MethodGet, "/dataspace/report?format=html", nil)
+	wEmpty := httptest.NewRecorder()
+	ctrl.router.ServeHTTP(wEmpty, reqEmpty)
+
+	if wEmpty.Code != http.StatusOK {
+		t.Fatalf("expected status 200 for empty report HTML, got %d", wEmpty.Code)
+	}
+	if !strings.Contains(wEmpty.Body.String(), "dataspace-report-empty") {
+		t.Errorf("expected dataspace-report-empty container in empty HTML report")
+	}
+
+	// 4. Test Multi-Language localization (English)
+	reqEN := httptest.NewRequest(http.MethodGet, "/dataspace/report?format=html&barcodes=0001847294", nil)
+	reqEN.Header.Set("Accept-Language", "en-US,en;q=0.9")
+	wEN := httptest.NewRecorder()
+	ctrl.router.ServeHTTP(wEN, reqEN)
+
+	if wEN.Code != http.StatusOK {
+		t.Fatalf("expected status 200 for English report HTML, got %d", wEN.Code)
+	}
+	bodyEN := wEN.Body.String()
+	if !strings.Contains(bodyEN, "Dossier &amp; Research Report") && !strings.Contains(bodyEN, "Dossier & Research Report") {
+		t.Errorf("expected English report title, got: %s", bodyEN)
+	}
+	if !strings.Contains(bodyEN, "Alma Matches") && !strings.Contains(bodyEN, "Alma Catalog") {
+		t.Errorf("expected English labels in report, got: %s", bodyEN)
+	}
+}

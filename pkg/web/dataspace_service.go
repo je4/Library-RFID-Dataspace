@@ -206,6 +206,13 @@ func (ctrl *Controller) handleDataspaceReport(c *gin.Context) {
 		return
 	}
 
+	format := strings.ToLower(strings.TrimSpace(c.Query("format")))
+	accept := c.GetHeader("Accept")
+	if format == "html" || (strings.Contains(accept, "text/html") && format != "json" && !strings.Contains(accept, "application/json")) {
+		ctrl.renderHTML(c, http.StatusOK, "dataspace_report.gohtml", resp)
+		return
+	}
+
 	c.JSON(http.StatusOK, resp)
 }
 

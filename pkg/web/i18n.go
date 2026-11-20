@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"html/template"
 	"net/http"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/gin-gonic/gin/render"
@@ -72,6 +73,14 @@ func templateFunctions(lang string) template.FuncMap {
 	return template.FuncMap{
 		"tr":   func(message string) string { return translate(lang, message) },
 		"lang": func() string { return lang },
+		"add":  func(a, b int) int { return a + b },
+		"inc":  func(a int) int { return a + 1 },
+		"formatDate": func(t time.Time) string {
+			if t.IsZero() {
+				return ""
+			}
+			return t.Format("02.01.2006, 15:04:05")
+		},
 	}
 }
 
