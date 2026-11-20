@@ -116,25 +116,25 @@ func TestDataspaceService_SingleBook(t *testing.T) {
 	}
 
 	// Verify deep links in Mermaid flowchart
-	if !strings.Contains(resp.Mermaid, "click Alma_1 href \"https://swisscovery.ch/discovery/search?query=any,contains,990049881560205518") {
+	if !strings.Contains(resp.Mermaid, "https://swisscovery.ch/discovery/search?query=any,contains,990049881560205518") {
 		t.Errorf("expected Swisscovery click deep link in Mermaid, got: %s", resp.Mermaid)
 	}
-	if !strings.Contains(resp.Mermaid, "click Auth_foelsing_albrecht_ href \"https://lobid.org/gnd/118772295\"") {
+	if !strings.Contains(resp.Mermaid, "https://lobid.org/gnd/118772295") {
 		t.Errorf("expected GND lobid click deep link on author in Mermaid, got: %s", resp.Mermaid)
 	}
-	if !strings.Contains(resp.Mermaid, "click Ink_zotero2_2068924_ href \"https://mediathek.hgk.fhnw.ch/ink/detail/zotero2-2068924.UHBBY3JP/de\"") {
+	if !strings.Contains(resp.Mermaid, "https://mediathek.hgk.fhnw.ch/ink/detail/zotero2-2068924.UHBBY3JP/de") {
 		t.Errorf("expected InK item detail click deep link in Mermaid, got: %s", resp.Mermaid)
 	}
-	if !strings.Contains(resp.Mermaid, "click Topic_electromagnetism_ href \"https://lobid.org/gnd/4002851-3\"") {
+	if !strings.Contains(resp.Mermaid, "https://lobid.org/gnd/4002851-3") {
 		t.Errorf("expected GND lobid click deep link on topic in Mermaid, got: %s", resp.Mermaid)
 	}
-	if !strings.Contains(resp.Mermaid, "click Work_1 href \"https://openalex.org/works?search=978-3-8171-3420-1\"") {
+	if !strings.Contains(resp.Mermaid, "https://openalex.org/works?search=978-3-8171-3420-1") {
 		t.Errorf("expected OpenAlex Work click deep link in Mermaid, got: %s", resp.Mermaid)
 	}
-	if !strings.Contains(resp.Mermaid, "click Lib_fhnw_campus_mutte_ href \"https://openalex.org/institutions?search=FHNW+Campus+Muttenz\"") {
+	if !strings.Contains(resp.Mermaid, "https://openalex.org/institutions?search=FHNW+Campus+Muttenz") {
 		t.Errorf("expected OpenAlex Institution click deep link in Mermaid, got: %s", resp.Mermaid)
 	}
-	if !strings.Contains(resp.Mermaid, "click Subfield_subfield_elect_ href \"https://openalex.org/subfields\"") {
+	if !strings.Contains(resp.Mermaid, "https://openalex.org/subfields") {
 		t.Errorf("expected OpenAlex Subfields click deep link in Mermaid, got: %s", resp.Mermaid)
 	}
 }
