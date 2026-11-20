@@ -12,6 +12,9 @@ let startX = 0;
 let startY = 0;
 let fetchTimeout = null;
 let currentRenderId = 0;
+let lastBarcodesKey = null;
+let lastRenderedDirection = 'TD';
+let lastMermaid = '';
 
 function isDarkMode() {
     const root = document.documentElement;
@@ -71,7 +74,39 @@ function resetZoomAndPan(container) {
     if (resetBtn) resetBtn.textContent = '100%';
 }
 
-export async function fetchAndRenderGraph(immediate = false) {
+function updateCopyButtonState() {
+    const copyBtn = document.getElementById('graph-copy-btn');
+    if (copyBtn) {
+        copyBtn.disabled = !lastMermaid || lastMermaid.trim().length === 0;
+    }
+}
+
+async function copyToClipboard(text) {
+    if (navigator.clipboard && window.isSecureContext) {
+        return navigator.clipboard.writeText(text);
+    }
+    const textArea = document.createElement('textarea');
+    textArea.value = text;
+    textArea.style.position = 'fixed';
+    textArea.style.left = '-999999px';
+    textArea.style.top = '-999999px';
+    document.body.appendChild(textArea);
+    textArea.focus();
+    textArea.select();
+    return new Promise((resolve, reject) => {
+        try {
+            const successful = document.execCommand('copy');
+            if (successful) resolve();
+            else reject(new Error('execCommand copy failed'));
+        } catch (err) {
+            reject(err);
+        } finally {
+            textArea.remove();
+        }
+    });
+}
+
+export async function fetchAndRenderGraph(immediate = false, force = false) {
     if (fetchTimeout) {
         clearTimeout(fetchTimeout);
         fetchTimeout = null;
@@ -87,7 +122,16 @@ export async function fetchAndRenderGraph(immediate = false) {
         if (!viewport || !output) return;
 
         const barcodes = getActiveBarcodes();
+        const barcodesKey = [...barcodes].sort().join(',');
+
         if (barcodes.length === 0) {
+            lastMermaid = '';
+            updateCopyButtonState();
+            if (lastBarcodesKey === '' && !force) {
+                return;
+            }
+            lastBarcodesKey = '';
+            lastRenderedDirection = currentDirection;
             output.innerHTML = '';
             if (emptyState) emptyState.classList.remove('hidden');
             if (loadingState) loadingState.classList.add('hidden');
@@ -95,8 +139,21 @@ export async function fetchAndRenderGraph(immediate = false) {
                 badge.classList.add('hidden');
                 badge.textContent = '0 Nodes';
             }
+            currentZoom = 1.0;
+            panX = 0;
+            panY = 0;
+            const resetBtn = document.getElementById('graph-zoom-reset');
+            if (resetBtn) resetBtn.textContent = '100%';
             return;
         }
+
+        const hasSvg = !!output.querySelector('svg');
+        // Prevent re-rendering and zooming jump if media list & layout direction haven't changed
+        if (!force && barcodesKey === lastBarcodesKey && currentDirection === lastRenderedDirection && hasSvg) {
+            return;
+        }
+
+        const wasEmpty = (lastBarcodesKey === '' || lastBarcodesKey === null);
 
         if (emptyState) emptyState.classList.add('hidden');
         if (loadingState) loadingState.classList.remove('hidden');
@@ -136,7 +193,19 @@ export async function fetchAndRenderGraph(immediate = false) {
                 svgElement.classList.add('select-none');
             }
 
-            resetZoomAndPan(output);
+            lastBarcodesKey = barcodesKey;
+            lastRenderedDirection = currentDirection;
+            lastMermaid = data.mermaid;
+            updateCopyButtonState();
+
+            // Preserve current zoom level and pan on reload/updates; only reset if starting from empty state
+            if (wasEmpty) {
+                resetZoomAndPan(output);
+            } else {
+                updateTransform(output);
+                const resetBtn = document.getElementById('graph-zoom-reset');
+                if (resetBtn) resetBtn.textContent = `${Math.round(currentZoom * 100)}%`;
+            }
 
             if (badge) {
                 badge.textContent = `${data.nodeCount} Nodes • ${data.edgeCount} Edges`;
@@ -144,6 +213,8 @@ export async function fetchAndRenderGraph(immediate = false) {
             }
         } catch (err) {
             console.warn('[Dataspace Graph] Render warning:', err);
+            lastMermaid = '';
+            updateCopyButtonState();
             if (renderId === currentRenderId) {
                 output.innerHTML = `<div class="alert alert-warning text-xs max-w-lg shadow-sm">
                     <span>${err.message || 'Graph visualizer unavailable'}</span>
@@ -180,7 +251,7 @@ export function initDataspaceGraph() {
             currentDirection = 'TD';
             dirTDBtn.className = 'btn btn-xs join-item btn-primary';
             dirLRBtn.className = 'btn btn-xs join-item btn-ghost';
-            fetchAndRenderGraph(true);
+            fetchAndRenderGraph(true, true);
         });
 
         dirLRBtn.addEventListener('click', () => {
@@ -188,7 +259,7 @@ export function initDataspaceGraph() {
             currentDirection = 'LR';
             dirLRBtn.className = 'btn btn-xs join-item btn-primary';
             dirTDBtn.className = 'btn btn-xs join-item btn-ghost';
-            fetchAndRenderGraph(true);
+            fetchAndRenderGraph(true, true);
         });
     }
 
@@ -272,7 +343,7 @@ export function initDataspaceGraph() {
             document.body.classList.remove('overflow-hidden');
         }
 
-        setTimeout(() => resetZoomAndPan(output), 150);
+        setTimeout(() => updateTransform(output), 150);
     };
 
     const toggleFullscreen = async () => {
@@ -332,13 +403,48 @@ export function initDataspaceGraph() {
 
     // Refresh button
     document.getElementById('graph-refresh-btn')?.addEventListener('click', () => {
-        fetchAndRenderGraph(true);
+        fetchAndRenderGraph(true, true);
     });
+
+    // Copy Mermaid Button
+    const copyBtn = document.getElementById('graph-copy-btn');
+    const copyIcon = document.getElementById('graph-copy-icon');
+    const copiedIcon = document.getElementById('graph-copied-icon');
+    const copyText = document.getElementById('graph-copy-text');
+    let copyTimeout = null;
+
+    if (copyBtn) {
+        copyBtn.addEventListener('click', async (e) => {
+            e.preventDefault();
+            if (!lastMermaid) return;
+            try {
+                await copyToClipboard(lastMermaid);
+                if (copyIcon) copyIcon.classList.add('hidden');
+                if (copiedIcon) copiedIcon.classList.remove('hidden');
+                const copiedLabel = copyBtn.getAttribute('data-copied-text') || 'Kopiert!';
+                const originalLabel = copyBtn.getAttribute('data-copy-text') || 'Mermaid kopieren';
+                if (copyText) copyText.textContent = copiedLabel;
+                copyBtn.classList.add('btn-success', 'text-success-content');
+
+                if (copyTimeout) clearTimeout(copyTimeout);
+                copyTimeout = setTimeout(() => {
+                    if (copyIcon) copyIcon.classList.remove('hidden');
+                    if (copiedIcon) copiedIcon.classList.add('hidden');
+                    if (copyText) copyText.textContent = originalLabel;
+                    copyBtn.classList.remove('btn-success', 'text-success-content');
+                }, 2000);
+            } catch (err) {
+                console.error('[Dataspace Graph] Copy failed:', err);
+            }
+        });
+    }
+
+    updateCopyButtonState();
 
     // Theme changes re-render
     const observer = new MutationObserver(() => {
         initMermaidConfig();
-        fetchAndRenderGraph(true);
+        fetchAndRenderGraph(true, true);
     });
     observer.observe(document.documentElement, {
         attributes: true,
@@ -349,11 +455,11 @@ export function initDataspaceGraph() {
     const loanBody = document.getElementById('loan-table-body');
     if (loanBody) {
         const tableObserver = new MutationObserver(() => {
-            fetchAndRenderGraph(false);
+            fetchAndRenderGraph(false, false);
         });
         tableObserver.observe(loanBody, { childList: true, subtree: true });
     }
 
     // Initial render
-    fetchAndRenderGraph(true);
+    fetchAndRenderGraph(true, true);
 }
