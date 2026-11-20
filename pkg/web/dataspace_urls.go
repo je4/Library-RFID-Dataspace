@@ -12,20 +12,30 @@ import (
 )
 
 var (
+	// nonAlphanumericRegex matches any characters outside basic alphanumeric characters and underscores.
 	nonAlphanumericRegex = regexp.MustCompile(`[^a-zA-Z0-9_]+`)
-	whitespaceRegex      = regexp.MustCompile(`\s+`)
-	gndExtractionRegex   = regexp.MustCompile(`(?i)(?:https?://(?:d-nb\.info|lobid\.org)/gnd/|\(DE-588[a-z]?\)|\(DE-101\)|gnd:?|gnd/)?([0-9X-]{7,15})`)
+	// whitespaceRegex matches sequences of one or more whitespace characters.
+	whitespaceRegex = regexp.MustCompile(`\s+`)
+	// gndExtractionRegex matches GND identifiers in various standard formats (e.g. Lobid URLs, (DE-588) prefixes, raw IDs).
+	gndExtractionRegex = regexp.MustCompile(`(?i)(?:https?://(?:d-nb\.info|lobid\.org)/gnd/|\(DE-588[a-z]?\)|\(DE-101\)|gnd:?|gnd/)?([0-9X-]{7,15})`)
 )
 
+// ============================================================================
+// String Formatting & Sanitization Helpers
+// ============================================================================
+
+// sanitizeMermaidLabel sanitizes strings for inclusion in Mermaid flowchart node labels,
+// replacing quotes and line breaks with safe equivalents to avoid syntax breaks.
 func sanitizeMermaidLabel(text string) string {
 	text = strings.ReplaceAll(text, "\"", "'")
 	text = strings.ReplaceAll(text, "\r\n", " ")
 	text = strings.ReplaceAll(text, "\n", " ")
 	text = whitespaceRegex.ReplaceAllString(text, " ")
-	text = strings.TrimSpace(text)
-	return text
+	return strings.TrimSpace(text)
 }
 
+// truncateText trims text to maxLen characters (measured in Unicode runes) and appends
+// an ellipsis ('…') if the text exceeds the limit.
 func truncateText(text string, maxLen int) string {
 	runes := []rune(text)
 	if len(runes) <= maxLen {
@@ -34,6 +44,8 @@ func truncateText(text string, maxLen int) string {
 	return string(runes[:maxLen-1]) + "…"
 }
 
+// slugify generates a safe, deterministic Mermaid identifier from an arbitrary input string.
+// It combines an alphanumeric prefix with a short SHA-256 hash to prevent collisions.
 func slugify(text string) string {
 	if text == "" {
 		return "unknown"
@@ -51,6 +63,8 @@ func slugify(text string) string {
 	return clean + "_" + hashPrefix
 }
 
+// extractGNDID attempts to extract a clean German Integrated Authority File (GND) identifier
+// from strings containing prefixes such as "(DE-588)", "d-nb.info", or "lobid.org".
 func extractGNDID(identifier string) string {
 	identifier = strings.TrimSpace(identifier)
 	if identifier == "" {
@@ -63,6 +77,8 @@ func extractGNDID(identifier string) string {
 	return ""
 }
 
+// cleanEntityID strips OpenAlex URL and type prefixes from an entity ID (e.g. converting
+// "https://openalex.org/works/W642892681" or "works/W642892681" into "W642892681").
 func cleanEntityID(rawID, defaultPrefix string) string {
 	rawID = strings.TrimSpace(rawID)
 	if rawID == "" {
@@ -76,6 +92,11 @@ func cleanEntityID(rawID, defaultPrefix string) string {
 	return rawID
 }
 
+// ============================================================================
+// URI & Deep Link Generators
+// ============================================================================
+
+// buildSwisscoveryURL constructs a search deep link to the Swisscovery discovery network.
 func buildSwisscoveryURL(book *catalog.Book, fallbackQuery string) string {
 	queryVal := fallbackQuery
 	if book != nil {
@@ -98,6 +119,7 @@ func buildSwisscoveryURL(book *catalog.Book, fallbackQuery string) string {
 	return fmt.Sprintf("https://swisscovery.ch/discovery/search?query=any,contains,%s&tab=41SLSP_NETWORK&search_scope=DN_and_CI&vid=41SLSP_NETWORK:VU1_UNION", url.QueryEscape(queryVal))
 }
 
+// buildInkDetailURL constructs a deep link into the Mediathek InK digital repository portal.
 func buildInkDetailURL(signature, fallbackURL string) string {
 	if signature != "" {
 		return fmt.Sprintf("https://mediathek.hgk.fhnw.ch/ink/detail/%s/de", url.PathEscape(signature))
@@ -108,6 +130,18 @@ func buildInkDetailURL(signature, fallbackURL string) string {
 	return "https://mediathek.hgk.fhnw.ch/ink/de"
 }
 
+// buildOpenAlexCategoryURL builds a direct URL for OpenAlex taxonomy and category concepts
+// (e.g. types, subfields, fields, domains, source-types, institution-types, indexes).
+func buildOpenAlexCategoryURL(category, rawValue string) string {
+	cleaned := cleanEntityID(rawValue, category)
+	cleaned = strings.TrimSpace(cleaned)
+	if cleaned != "" {
+		return fmt.Sprintf("https://openalex.org/%s/%s", category, url.PathEscape(strings.ToLower(cleaned)))
+	}
+	return fmt.Sprintf("https://openalex.org/%s", category)
+}
+
+// buildOpenAlexWorkURL generates a direct OpenAlex work URL or a targeted search fallback URL.
 func buildOpenAlexWorkURL(workID, doi, isbn, title string) string {
 	if id := cleanEntityID(workID, "works"); id != "" && (strings.HasPrefix(id, "W") || len(id) > 2) {
 		return fmt.Sprintf("https://openalex.org/works/%s", id)
@@ -127,6 +161,7 @@ func buildOpenAlexWorkURL(workID, doi, isbn, title string) string {
 	return "https://openalex.org/works"
 }
 
+// buildOpenAlexAuthorURL generates an author profile URL (OpenAlex or ORCID) and an informative tooltip.
 func buildOpenAlexAuthorURL(authorID, orcid, name string) (urlStr string, tooltip string) {
 	if id := cleanEntityID(authorID, "authors"); id != "" && (strings.HasPrefix(id, "A") || len(id) > 2) {
 		tip := fmt.Sprintf("OpenAlex Author: %s", id)
@@ -146,6 +181,8 @@ func buildOpenAlexAuthorURL(authorID, orcid, name string) (urlStr string, toolti
 	return "https://openalex.org/authors", "OpenAlex Authors"
 }
 
+// buildAuthorOrGNDURL checks whether the identifier is a GND authority ID; if found,
+// it returns a lobid.org GND deep link. Otherwise, it delegates to buildOpenAlexAuthorURL.
 func buildAuthorOrGNDURL(identifier, name string) (urlStr string, tooltip string) {
 	if gndID := extractGNDID(identifier); gndID != "" {
 		return fmt.Sprintf("https://lobid.org/gnd/%s", url.PathEscape(gndID)), fmt.Sprintf("GND: %s (lobid.org)", gndID)
@@ -153,6 +190,7 @@ func buildAuthorOrGNDURL(identifier, name string) (urlStr string, tooltip string
 	return buildOpenAlexAuthorURL(identifier, "", name)
 }
 
+// buildOpenAlexTopicURL builds a direct OpenAlex topic URL and tooltip or a topic search URL.
 func buildOpenAlexTopicURL(topicID, label string) (urlStr string, tooltip string) {
 	if id := cleanEntityID(topicID, "topics"); id != "" && (strings.HasPrefix(id, "T") || len(id) > 2) {
 		tip := fmt.Sprintf("OpenAlex Topic: %s", id)
@@ -167,6 +205,8 @@ func buildOpenAlexTopicURL(topicID, label string) (urlStr string, tooltip string
 	return "https://openalex.org/topics", "OpenAlex Topics"
 }
 
+// buildTopicOrGNDURL checks whether the subject identifier is a GND ID; if found,
+// it returns a lobid.org GND deep link. Otherwise, it delegates to buildOpenAlexTopicURL.
 func buildTopicOrGNDURL(identifier, label string) (urlStr string, tooltip string) {
 	if gndID := extractGNDID(identifier); gndID != "" {
 		return fmt.Sprintf("https://lobid.org/gnd/%s", url.PathEscape(gndID)), fmt.Sprintf("GND: %s (lobid.org)", gndID)
@@ -174,27 +214,22 @@ func buildTopicOrGNDURL(identifier, label string) (urlStr string, tooltip string
 	return buildOpenAlexTopicURL(identifier, label)
 }
 
+// buildOpenAlexSubfieldURL builds a direct URL to an OpenAlex subfield entity.
 func buildOpenAlexSubfieldURL(subfieldID, label string) string {
-	if id := cleanEntityID(subfieldID, "subfields"); id != "" {
-		return fmt.Sprintf("https://openalex.org/subfields/%s", id)
-	}
-	return "https://openalex.org/subfields"
+	return buildOpenAlexCategoryURL("subfields", subfieldID)
 }
 
+// buildOpenAlexFieldURL builds a direct URL to an OpenAlex field entity.
 func buildOpenAlexFieldURL(fieldID, label string) string {
-	if id := cleanEntityID(fieldID, "fields"); id != "" {
-		return fmt.Sprintf("https://openalex.org/fields/%s", id)
-	}
-	return "https://openalex.org/fields"
+	return buildOpenAlexCategoryURL("fields", fieldID)
 }
 
+// buildOpenAlexDomainURL builds a direct URL to an OpenAlex domain entity.
 func buildOpenAlexDomainURL(domainID, label string) string {
-	if id := cleanEntityID(domainID, "domains"); id != "" {
-		return fmt.Sprintf("https://openalex.org/domains/%s", id)
-	}
-	return "https://openalex.org/domains"
+	return buildOpenAlexCategoryURL("domains", domainID)
 }
 
+// buildOpenAlexInstitutionURL generates a direct OpenAlex institution URL, ROR link, or search URL.
 func buildOpenAlexInstitutionURL(instID, ror, name string) string {
 	if id := cleanEntityID(instID, "institutions"); id != "" && (strings.HasPrefix(id, "I") || len(id) > 2) {
 		return fmt.Sprintf("https://openalex.org/institutions/%s", id)
@@ -209,6 +244,7 @@ func buildOpenAlexInstitutionURL(instID, ror, name string) string {
 	return "https://openalex.org/institutions"
 }
 
+// buildOpenAlexSourceURL generates a direct OpenAlex source (journal, repository) profile URL or search URL.
 func buildOpenAlexSourceURL(sourceID, name string) string {
 	if id := cleanEntityID(sourceID, "sources"); id != "" && (strings.HasPrefix(id, "S") || len(id) > 2) {
 		return fmt.Sprintf("https://openalex.org/sources/%s", id)
@@ -219,6 +255,7 @@ func buildOpenAlexSourceURL(sourceID, name string) string {
 	return "https://openalex.org/sources"
 }
 
+// buildOpenAlexPublisherURL generates a direct OpenAlex publisher entity URL or search URL.
 func buildOpenAlexPublisherURL(pubID, name string) string {
 	if id := cleanEntityID(pubID, "publishers"); id != "" && (strings.HasPrefix(id, "P") || len(id) > 2) {
 		return fmt.Sprintf("https://openalex.org/publishers/%s", id)
@@ -229,37 +266,27 @@ func buildOpenAlexPublisherURL(pubID, name string) string {
 	return "https://openalex.org/publishers"
 }
 
+// buildOpenAlexTypeURL generates a direct OpenAlex work type taxonomy URL.
 func buildOpenAlexTypeURL(workType string) string {
-	if workType != "" {
-		return fmt.Sprintf("https://openalex.org/types/%s", url.PathEscape(strings.ToLower(strings.TrimSpace(workType))))
-	}
-	return "https://openalex.org/types"
+	return buildOpenAlexCategoryURL("types", workType)
 }
 
+// buildOpenAlexInstitutionTypeURL generates a direct OpenAlex institution type taxonomy URL.
 func buildOpenAlexInstitutionTypeURL(instType string) string {
-	if instType != "" {
-		return fmt.Sprintf("https://openalex.org/institution-types/%s", url.PathEscape(strings.ToLower(strings.TrimSpace(instType))))
-	}
-	return "https://openalex.org/institution-types"
+	return buildOpenAlexCategoryURL("institution-types", instType)
 }
 
+// buildOpenAlexSourceTypeURL generates a direct OpenAlex source type taxonomy URL.
 func buildOpenAlexSourceTypeURL(sourceType string) string {
-	if sourceType != "" {
-		return fmt.Sprintf("https://openalex.org/source-types/%s", url.PathEscape(strings.ToLower(strings.TrimSpace(sourceType))))
-	}
-	return "https://openalex.org/source-types"
+	return buildOpenAlexCategoryURL("source-types", sourceType)
 }
 
+// buildOpenAlexIndexURL generates a direct OpenAlex index identifier taxonomy URL.
 func buildOpenAlexIndexURL(indexName string) string {
-	if indexName != "" {
-		return fmt.Sprintf("https://openalex.org/indexes/%s", url.PathEscape(strings.ToLower(strings.TrimSpace(indexName))))
-	}
-	return "https://openalex.org/indexes"
+	return buildOpenAlexCategoryURL("indexes", indexName)
 }
 
+// buildOpenAlexSourceListURL generates a direct OpenAlex source list taxonomy URL.
 func buildOpenAlexSourceListURL(listName string) string {
-	if listName != "" {
-		return fmt.Sprintf("https://openalex.org/source-lists/%s", url.PathEscape(strings.ToLower(strings.TrimSpace(listName))))
-	}
-	return "https://openalex.org/source-lists"
+	return buildOpenAlexCategoryURL("source-lists", listName)
 }

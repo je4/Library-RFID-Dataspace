@@ -15,21 +15,9 @@ import (
 // SourceRecordMapping associates institution names and view IDs with a network.
 type SourceRecordMapping = appsweb.SourceRecordMapping
 
-type catalogLoader struct {
-	search func(context.Context, string) ([]catalog.Book, error)
-}
-
-func (l catalogLoader) Load(ctx context.Context, barcode string) ([]catalog.Book, error) {
-	return l.search(ctx, barcode)
-}
-
-func (l catalogLoader) Reload(ctx context.Context, barcode string, _ []catalog.Book) ([]catalog.Book, error) {
-	return l.Load(ctx, barcode)
-}
-
 type catalogService struct {
 	cache  *otter.Cache[string, []catalog.Book]
-	loader catalogLoader
+	loader funcCacheLoader[string, []catalog.Book]
 }
 
 func newCatalogService(search func(context.Context, string) ([]catalog.Book, error)) *catalogService {
@@ -38,7 +26,7 @@ func newCatalogService(search func(context.Context, string) ([]catalog.Book, err
 			MaximumSize:      10000,
 			ExpiryCalculator: otter.ExpiryWriting[string, []catalog.Book](15 * time.Minute),
 		}),
-		loader: catalogLoader{search: search},
+		loader: newFuncCacheLoader(search),
 	}
 }
 

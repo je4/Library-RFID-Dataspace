@@ -8,57 +8,29 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/je4/Library-RFID-Apps/pkg/catalog"
+	"github.com/je4/Library-RFID-Apps/pkg/desk"
 	"github.com/maypok86/otter/v2"
 )
 
-type dataspaceGraphLoader struct {
-	svc *dataspaceService
-}
-
-func (l dataspaceGraphLoader) Load(ctx context.Context, key string) (DataspaceGraphResponse, error) {
-	// key format: "graph:DIRECTION:bc1,bc2,..."
-	parts := strings.SplitN(strings.TrimPrefix(key, "graph:"), ":", 2)
-	dir := parts[0]
-	var barcodes []string
-	if len(parts) > 1 && parts[1] != "" {
-		barcodes = strings.Split(parts[1], ",")
-	}
-	return l.svc.buildGraph(ctx, barcodes, dir)
-}
-
-func (l dataspaceGraphLoader) Reload(ctx context.Context, key string, _ DataspaceGraphResponse) (DataspaceGraphResponse, error) {
-	return l.Load(ctx, key)
-}
-
-type dataspaceReportLoader struct {
-	svc *dataspaceService
-}
-
-func (l dataspaceReportLoader) Load(ctx context.Context, key string) (DataspaceReportResponse, error) {
-	// key format: "report:bc1,bc2,..."
-	rawBarcodes := strings.TrimPrefix(key, "report:")
-	var barcodes []string
-	if rawBarcodes != "" {
-		barcodes = strings.Split(rawBarcodes, ",")
-	}
-	return l.svc.buildReport(ctx, barcodes)
-}
-
-func (l dataspaceReportLoader) Reload(ctx context.Context, key string, _ DataspaceReportResponse) (DataspaceReportResponse, error) {
-	return l.Load(ctx, key)
-}
-
+// dataspaceService orchestrates querying, caching, and synthesizing bibliographic
+// metadata from Alma library catalog, digital repository items from Mediathek InK,
+// and scholarly citation / taxonomy data from OpenAlex.
 type dataspaceService struct {
 	catalogSearch  func(context.Context, string) ([]catalog.Book, error)
 	inkSearch      InkSearchFunc
 	openAlexSearch OpenAlexSearchFunc
 	graphCache     *otter.Cache[string, DataspaceGraphResponse]
-	graphLoader    dataspaceGraphLoader
+	graphLoader    funcCacheLoader[string, DataspaceGraphResponse]
 	reportCache    *otter.Cache[string, DataspaceReportResponse]
-	reportLoader   dataspaceReportLoader
+	reportLoader   funcCacheLoader[string, DataspaceReportResponse]
 }
 
-func newDataspaceService(catalogSearch func(context.Context, string) ([]catalog.Book, error), inkSearch InkSearchFunc, openAlexSearch OpenAlexSearchFunc) *dataspaceService {
+// newDataspaceService initializes and configures the dataspace service with caching.
+func newDataspaceService(
+	catalogSearch func(context.Context, string) ([]catalog.Book, error),
+	inkSearch InkSearchFunc,
+	openAlexSearch OpenAlexSearchFunc,
+) *dataspaceService {
 	svc := &dataspaceService{
 		catalogSearch:  catalogSearch,
 		inkSearch:      inkSearch,
@@ -72,18 +44,39 @@ func newDataspaceService(catalogSearch func(context.Context, string) ([]catalog.
 			ExpiryCalculator: otter.ExpiryWriting[string, DataspaceReportResponse](5 * time.Minute),
 		}),
 	}
-	svc.graphLoader = dataspaceGraphLoader{svc: svc}
-	svc.reportLoader = dataspaceReportLoader{svc: svc}
+
+	svc.graphLoader = newFuncCacheLoader(func(ctx context.Context, key string) (DataspaceGraphResponse, error) {
+		// Key format: "graph:DIRECTION:bc1,bc2,..."
+		parts := strings.SplitN(strings.TrimPrefix(key, "graph:"), ":", 2)
+		dir := parts[0]
+		var barcodes []string
+		if len(parts) > 1 && parts[1] != "" {
+			barcodes = strings.Split(parts[1], ",")
+		}
+		return svc.buildGraph(ctx, barcodes, dir)
+	})
+
+	svc.reportLoader = newFuncCacheLoader(func(ctx context.Context, key string) (DataspaceReportResponse, error) {
+		// Key format: "report:bc1,bc2,..."
+		rawBarcodes := strings.TrimPrefix(key, "report:")
+		var barcodes []string
+		if rawBarcodes != "" {
+			barcodes = strings.Split(rawBarcodes, ",")
+		}
+		return svc.buildReport(ctx, barcodes)
+	})
+
 	return svc
 }
 
-// resolveDataspaceData executes unified querying across Alma, InK, and OpenAlex.
+// resolveDataspaceData executes unified querying across Alma, InK, and OpenAlex for each barcode.
 func (s *dataspaceService) resolveDataspaceData(ctx context.Context, cleanBarcodes []string) ([]dataspaceItemContext, error) {
 	items := make([]dataspaceItemContext, 0, len(cleanBarcodes))
 
 	for _, bc := range cleanBarcodes {
 		itCtx := dataspaceItemContext{barcode: bc}
 
+		// 1. Resolve Alma Catalog Record
 		if s.catalogSearch != nil {
 			books, err := s.catalogSearch(ctx, bc)
 			if err == nil && len(books) > 0 {
@@ -91,40 +84,20 @@ func (s *dataspaceService) resolveDataspaceData(ctx context.Context, cleanBarcod
 			}
 		}
 
-		// Gather search keys for InK and OpenAlex
+		// 2. Extract search keys for InK and OpenAlex using catalog extraction helpers
 		var authors []string
 		var title string
 		var isbns []string
 		var dois []string
 
 		if itCtx.book != nil {
-			book := itCtx.book
-			if len(book.Titles) > 0 {
-				title = book.Titles[0].Title
-			}
-			for _, nameMap := range book.PersonalNames {
-				for _, nameEntry := range nameMap {
-					if nameEntry.NamePart != "" {
-						authors = append(authors, nameEntry.NamePart)
-					}
-				}
-			}
-			for _, isbn := range book.ISBNs {
-				if isbn.Enriched != "" {
-					isbns = append(isbns, isbn.Enriched)
-				} else if isbn.ID != "" {
-					isbns = append(isbns, isbn.ID)
-				}
-			}
-			for _, otherId := range book.Identifiers {
-				otherId = strings.TrimSpace(otherId)
-				if strings.HasPrefix(strings.ToLower(otherId), "doi:") || strings.Contains(otherId, "10.") {
-					dois = append(dois, otherId)
-				}
-			}
+			title, _ = extractBookTitle(itCtx.book, "")
+			authors = mapSlice(extractCatalogAuthors(itCtx.book), func(a CatalogAuthorInfo) string { return a.Name })
+			isbns = extractAllISBNs(itCtx.book)
+			dois = extractBookDOIs(itCtx.book)
 		}
 
-		// Search InK
+		// 3. Search Mediathek InK digital repository
 		if s.inkSearch != nil {
 			inkItems, err := s.inkSearch(ctx, bc, authors, title, isbns)
 			if err == nil && len(inkItems) > 0 {
@@ -132,7 +105,7 @@ func (s *dataspaceService) resolveDataspaceData(ctx context.Context, cleanBarcod
 			}
 		}
 
-		// Search OpenAlex
+		// 4. Search OpenAlex scholarly knowledge graph
 		if s.openAlexSearch != nil && (len(isbns) > 0 || title != "" || len(authors) > 0 || len(dois) > 0) {
 			oaWorks, err := s.openAlexSearch(ctx, isbns, title, authors, dois)
 			if err == nil && len(oaWorks) > 0 {
@@ -146,6 +119,7 @@ func (s *dataspaceService) resolveDataspaceData(ctx context.Context, cleanBarcod
 	return items, nil
 }
 
+// handleDataspaceGraph handles HTTP GET requests to /api/dataspace/graph and /api/dataspace/graph/:channel.
 func (ctrl *Controller) handleDataspaceGraph(c *gin.Context) {
 	if ctrl.dataspaceService == nil {
 		c.Status(http.StatusServiceUnavailable)
@@ -169,6 +143,7 @@ func (ctrl *Controller) handleDataspaceGraph(c *gin.Context) {
 	c.JSON(http.StatusOK, resp)
 }
 
+// handleDataspaceReport handles HTTP GET requests to /api/dataspace/report and /api/dataspace/report/:channel.
 func (ctrl *Controller) handleDataspaceReport(c *gin.Context) {
 	if ctrl.dataspaceService == nil {
 		c.Status(http.StatusServiceUnavailable)
@@ -191,28 +166,25 @@ func (ctrl *Controller) handleDataspaceReport(c *gin.Context) {
 	c.JSON(http.StatusOK, resp)
 }
 
+// extractBarcodesFromRequest extracts, cleans, and deduplicates barcodes from either the
+// "barcodes" query parameter (comma-separated) or active RFID tags on the antenna channel.
 func (ctrl *Controller) extractBarcodesFromRequest(c *gin.Context) []string {
 	barcodesParam := strings.TrimSpace(c.Query("barcodes"))
-	var barcodes []string
 	if barcodesParam != "" {
-		for _, b := range strings.Split(barcodesParam, ",") {
-			b = strings.TrimSpace(b)
-			if b != "" {
-				barcodes = append(barcodes, b)
-			}
-		}
-	} else {
-		// Use active tags on reader channel
-		channel := c.Param("channel")
-		if channel == "" && len(ctrl.cfg.Channels) > 0 {
-			channel = ctrl.cfg.Channels[0]
-		}
-		activeTags := ctrl.hub.GetActiveTagsForChannel(channel, "*")
-		for _, t := range activeTags {
-			if t.ItemID != "" {
-				barcodes = append(barcodes, t.ItemID)
-			}
-		}
+		return cleanStrings(strings.Split(barcodesParam, ","))
 	}
-	return barcodes
+
+	// Retrieve active RFID tags on the specified desk channel
+	channel := c.Param("channel")
+	if channel == "" && len(ctrl.cfg.Channels) > 0 {
+		channel = ctrl.cfg.Channels[0]
+	}
+	activeTags := ctrl.hub.GetActiveTagsForChannel(channel, "*")
+	rawBarcodes := mapSlice(activeTags, func(t *desk.TagItem) string {
+		if t != nil {
+			return t.ItemID
+		}
+		return ""
+	})
+	return cleanStrings(rawBarcodes)
 }

@@ -6,17 +6,10 @@ import (
 	"time"
 )
 
-// GenerateReport creates a structured dossier / report summarizing the bibliographic, repository, and scholarly data.
+// GenerateReport creates a structured dossier / report summarizing the bibliographic,
+// digital repository, and scholarly knowledge graph data for the given barcodes.
 func (s *dataspaceService) GenerateReport(ctx context.Context, barcodes []string) (DataspaceReportResponse, error) {
-	cleanBarcodes := make([]string, 0, len(barcodes))
-	seenBarcodes := make(map[string]bool)
-	for _, b := range barcodes {
-		b = strings.TrimSpace(b)
-		if b != "" && !seenBarcodes[b] {
-			seenBarcodes[b] = true
-			cleanBarcodes = append(cleanBarcodes, b)
-		}
-	}
+	cleanBarcodes := cleanStrings(barcodes)
 
 	if len(cleanBarcodes) == 0 {
 		return DataspaceReportResponse{
@@ -45,6 +38,7 @@ func (s *dataspaceService) GenerateReport(ctx context.Context, barcodes []string
 	return s.reportCache.Get(ctx, cacheKey, s.reportLoader)
 }
 
+// buildReport aggregates all bibliographic, archive, and citation data into a structured dossier.
 func (s *dataspaceService) buildReport(ctx context.Context, cleanBarcodes []string) (DataspaceReportResponse, error) {
 	items, err := s.resolveDataspaceData(ctx, cleanBarcodes)
 	if err != nil {
@@ -74,92 +68,50 @@ func (s *dataspaceService) buildReport(ctx context.Context, cleanBarcodes []stri
 			repItem.HasCatalog = true
 			book := it.book
 
-			if len(book.Titles) > 0 {
-				repItem.Title = book.Titles[0].Title
-				repItem.Subtitle = book.Titles[0].SubTitle
-			}
+			repItem.Title, repItem.Subtitle = extractBookTitle(book, "Medium "+it.barcode)
 			if len(book.Responsibility) > 0 {
 				repItem.Responsibility = book.Responsibility[0].Main
 			}
-			if repItem.Title == "" {
-				repItem.Title = "Medium " + it.barcode
-			}
-
-			if len(book.ISBNs) > 0 {
-				if book.ISBNs[0].Enriched != "" {
-					repItem.ISBN = book.ISBNs[0].Enriched
-				} else {
-					repItem.ISBN = book.ISBNs[0].ID
-				}
-			}
-
-			if len(book.Holdings) > 0 {
-				if book.Holdings[0].CallNumber != "" {
-					repItem.CallNumber = book.Holdings[0].CallNumber
-				} else if len(book.Holdings[0].Items) > 0 && book.Holdings[0].Items[0].ItemCallNumber != "" {
-					repItem.CallNumber = book.Holdings[0].Items[0].ItemCallNumber
-				}
-			}
+			repItem.ISBN = extractPrimaryISBN(book)
+			repItem.CallNumber = extractBookCallNumber(book)
 
 			if book.ID != "" {
 				repItem.MMSID = book.ID
 			}
 
 			repItem.SwisscoveryURL = buildSwisscoveryURL(book, it.barcode)
+			repItem.PublicationYear, repItem.Publisher = extractBookPublisher(book)
 
-			// Publication info
-			if len(book.Publications) > 0 {
-				pub := book.Publications[0]
-				repItem.PublicationYear = pub.DateString
-				if len(pub.Publisher) > 0 {
-					repItem.Publisher = strings.Join(pub.Publisher, ", ")
-				}
+			// Authors from Alma Catalog
+			catalogAuthors := extractCatalogAuthors(book)
+			for _, auth := range catalogAuthors {
+				repItem.Authors = append(repItem.Authors, DataspaceAuthorEntry{
+					Name:        auth.Name,
+					Role:        auth.Role,
+					GNDID:       auth.GNDID,
+					GNDURL:      auth.GNDURL,
+					OpenAlexURL: auth.OpenAlexURL,
+				})
+				allAuthorsMap[auth.Name] = true
+				authorOccurrences[auth.Name]++
 			}
 
-			// Authors
-			for _, nameMap := range book.PersonalNames {
-				for role, nameEntry := range nameMap {
-					if nameEntry.NamePart != "" {
-						gndID := extractGNDID(nameEntry.Identifier)
-						var gndURL string
-						if gndID != "" {
-							gndURL = "https://lobid.org/gnd/" + gndID
-						}
-						oaURL, _ := buildOpenAlexAuthorURL(nameEntry.Identifier, "", nameEntry.NamePart)
-
-						repItem.Authors = append(repItem.Authors, DataspaceAuthorEntry{
-							Name:        nameEntry.NamePart,
-							Role:        role,
-							GNDID:       gndID,
-							GNDURL:      gndURL,
-							OpenAlexURL: oaURL,
-						})
-						allAuthorsMap[nameEntry.NamePart] = true
-						authorOccurrences[nameEntry.NamePart]++
-					}
-				}
-			}
-
-			// Subjects / Topics
-			for _, topicMap := range book.Subjects.Topic {
-				for _, term := range topicMap {
-					if term.Label != "" {
-						topicURL, _ := buildTopicOrGNDURL(term.Identifier, term.Label)
-						repItem.Subjects = append(repItem.Subjects, DataspaceTopicEntry{
-							Label:      term.Label,
-							Identifier: term.Identifier,
-							URL:        topicURL,
-						})
-						allTopicsMap[term.Label] = true
-					}
-				}
+			// Subjects & Topics from Alma Catalog
+			catalogTopics := extractCatalogTopics(book)
+			for _, top := range catalogTopics {
+				repItem.Subjects = append(repItem.Subjects, DataspaceTopicEntry{
+					Label:      top.Label,
+					Identifier: top.Identifier,
+					URL:        top.URL,
+				})
+				allTopicsMap[top.Label] = true
 			}
 		} else {
 			repItem.Title = "Medium " + it.barcode + " (Kein Katalogeintrag)"
 			repItem.SwisscoveryURL = buildSwisscoveryURL(nil, it.barcode)
 		}
 
-		// InK matches
+		// InK matches from Mediathek HGK
 		for _, ink := range it.inkItems {
 			inkHits++
 			repItem.InkItems = append(repItem.InkItems, InkItemReport{
@@ -176,7 +128,7 @@ func (s *dataspaceService) buildReport(ctx context.Context, cleanBarcodes []stri
 			})
 		}
 
-		// OpenAlex matches
+		// OpenAlex scholarly works matches
 		for _, oa := range it.openAlexWorks {
 			openAlexHits++
 			workTitle := oa.DisplayName
@@ -275,12 +227,12 @@ func (s *dataspaceService) buildReport(ctx context.Context, cleanBarcodes []stri
 		reportItems = append(reportItems, repItem)
 	}
 
-	// Calculate Top Domains, Fields, Prominent Authors
-	topDomains := getTopKeys(allDomainsMap, 3)
-	topFields := getTopKeys(allFieldsMap, 4)
-	prominentAuthors := getTopKeys(authorOccurrences, 5)
+	// Calculate Top Domains, Fields, Prominent Authors using generic frequency ranking
+	topDomains := topKeysByFrequency(allDomainsMap, 3)
+	topFields := topKeysByFrequency(allFieldsMap, 4)
+	prominentAuthors := topKeysByFrequency(authorOccurrences, 5)
 
-	// Detect Shared Cross-Links
+	// Detect Shared Cross-Links between items
 	var sharedLinks []DataspaceReportLink
 	if len(reportItems) > 1 {
 		for i := 0; i < len(reportItems); i++ {
@@ -343,34 +295,4 @@ func (s *dataspaceService) buildReport(ctx context.Context, cleanBarcodes []stri
 		},
 		SharedLinks: sharedLinks,
 	}, nil
-}
-
-func getTopKeys(m map[string]int, limit int) []string {
-	if len(m) == 0 {
-		return []string{}
-	}
-	type pair struct {
-		k string
-		v int
-	}
-	pairs := make([]pair, 0, len(m))
-	for k, v := range m {
-		pairs = append(pairs, pair{k: k, v: v})
-	}
-	// Sort descending by count
-	for i := 0; i < len(pairs); i++ {
-		for j := i + 1; j < len(pairs); j++ {
-			if pairs[j].v > pairs[i].v {
-				pairs[i], pairs[j] = pairs[j], pairs[i]
-			}
-		}
-	}
-	res := make([]string, 0, limit)
-	for i, p := range pairs {
-		if i >= limit {
-			break
-		}
-		res = append(res, p.k)
-	}
-	return res
 }

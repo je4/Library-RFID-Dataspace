@@ -6,23 +6,15 @@ import (
 	"strings"
 )
 
-// GenerateMermaid builds a Mermaid flowchart string connecting Alma records and OpenAlex entities.
+// GenerateMermaid constructs an interactive Mermaid flowchart representing the connected
+// bibliographic, repository, and scholarly dataspace for the specified barcodes.
 func (s *dataspaceService) GenerateMermaid(ctx context.Context, barcodes []string, direction string) (DataspaceGraphResponse, error) {
 	dir := strings.ToUpper(strings.TrimSpace(direction))
 	if dir != "LR" && dir != "TD" {
 		dir = "TD"
 	}
 
-	cleanBarcodes := make([]string, 0, len(barcodes))
-	seenBarcodes := make(map[string]bool)
-	for _, b := range barcodes {
-		b = strings.TrimSpace(b)
-		if b != "" && !seenBarcodes[b] {
-			seenBarcodes[b] = true
-			cleanBarcodes = append(cleanBarcodes, b)
-		}
-	}
-
+	cleanBarcodes := cleanStrings(barcodes)
 	if len(cleanBarcodes) == 0 {
 		return DataspaceGraphResponse{
 			Mermaid:   fmt.Sprintf("flowchart %s\n    Empty([\"Keine aktiven Medien\"])", dir),
@@ -38,6 +30,7 @@ func (s *dataspaceService) GenerateMermaid(ctx context.Context, barcodes []strin
 	return s.graphCache.Get(ctx, cacheKey, s.graphLoader)
 }
 
+// buildGraph assembles the complete Mermaid knowledge graph across Alma, InK, and OpenAlex.
 func (s *dataspaceService) buildGraph(ctx context.Context, cleanBarcodes []string, dir string) (DataspaceGraphResponse, error) {
 	items, err := s.resolveDataspaceData(ctx, cleanBarcodes)
 	if err != nil {
@@ -105,7 +98,7 @@ func (s *dataspaceService) buildGraph(ctx context.Context, cleanBarcodes []strin
 		addNode(&physicalNodes, tagNodeID, fmt.Sprintf("        %s([\"%s\"]):::nodeTag", tagNodeID, sanitizeMermaidLabel(tagLabel)))
 
 		if it.book == nil {
-			// No catalog record found
+			// No catalog record found in Alma
 			unresolvedID := fmt.Sprintf("Unknown_%d", i+1)
 			addNode(&physicalNodes, unresolvedID, fmt.Sprintf("        %s[\"Medium %s<br/>(Kein Katalogtreffer)\"]:::nodeAlma", unresolvedID, sanitizeMermaidLabel(it.barcode)))
 			addEdge(tagNodeID, "-->", "erfasst", unresolvedID)
@@ -130,24 +123,9 @@ func (s *dataspaceService) buildGraph(ctx context.Context, cleanBarcodes []strin
 		}
 
 		book := it.book
-		// Determine title and identifiers
-		var titleStr string
-		if len(book.Titles) > 0 {
-			titleStr = book.Titles[0].Title
-		}
-		if titleStr == "" {
-			titleStr = fmt.Sprintf("Item %s", it.barcode)
-		}
+		titleStr, _ := extractBookTitle(book, fmt.Sprintf("Item %s", it.barcode))
 		shortTitle := truncateText(titleStr, 35)
-
-		var isbnStr string
-		if len(book.ISBNs) > 0 {
-			if book.ISBNs[0].Enriched != "" {
-				isbnStr = book.ISBNs[0].Enriched
-			} else {
-				isbnStr = book.ISBNs[0].ID
-			}
-		}
+		isbnStr := extractPrimaryISBN(book)
 
 		almaNodeID := fmt.Sprintf("Alma_%d", i+1)
 		almaLabel := fmt.Sprintf("Alma: %s", shortTitle)
@@ -184,27 +162,23 @@ func (s *dataspaceService) buildGraph(ctx context.Context, cleanBarcodes []strin
 			}
 		}
 
-		// Authors & GND Links
+		// Authors & GND Authority Links
 		var bookAuthors []string
-		for _, nameMap := range book.PersonalNames {
-			for role, nameEntry := range nameMap {
-				if nameEntry.NamePart != "" {
-					authorLabel := sanitizeMermaidLabel(nameEntry.NamePart)
-					authorNodeID := "Auth_" + slugify(nameEntry.NamePart)
-					authorURL, authorTip := buildAuthorOrGNDURL(nameEntry.Identifier, nameEntry.NamePart)
-					addNode(&scholarlyNodes, authorNodeID, fmt.Sprintf("        %s{{\"Author: %s\"}}:::nodeAuthor", authorNodeID, authorLabel))
-					addClick(authorNodeID, authorURL, authorTip)
+		catalogAuthors := extractCatalogAuthors(book)
+		for _, auth := range catalogAuthors {
+			authorLabel := sanitizeMermaidLabel(auth.Name)
+			authorNodeID := "Auth_" + slugify(auth.Name)
+			addNode(&scholarlyNodes, authorNodeID, fmt.Sprintf("        %s{{\"Author: %s\"}}:::nodeAuthor", authorNodeID, authorLabel))
+			addClick(authorNodeID, auth.OpenAlexURL, auth.Tooltip)
 
-					edgeLabel := "created by"
-					if role == "aut" {
-						edgeLabel = "author"
-					} else if role == "edt" {
-						edgeLabel = "editor"
-					}
-					addEdge(almaNodeID, "-->", edgeLabel, authorNodeID)
-					bookAuthors = append(bookAuthors, authorNodeID)
-				}
+			edgeLabel := "created by"
+			if auth.Role == "aut" {
+				edgeLabel = "author"
+			} else if auth.Role == "edt" {
+				edgeLabel = "editor"
 			}
+			addEdge(almaNodeID, "-->", edgeLabel, authorNodeID)
+			bookAuthors = append(bookAuthors, authorNodeID)
 		}
 
 		var bookTopics []string
@@ -417,36 +391,32 @@ func (s *dataspaceService) buildGraph(ctx context.Context, cleanBarcodes []strin
 			}
 
 			// Subjects / Topics
-			for _, topicMap := range book.Subjects.Topic {
-				for _, term := range topicMap {
-					if term.Label != "" {
-						topicLabel := sanitizeMermaidLabel(term.Label)
-						topicNodeID := "Topic_" + slugify(term.Label)
-						topicURL, topicTip := buildTopicOrGNDURL(term.Identifier, term.Label)
-						addNode(&taxonomyNodes, topicNodeID, fmt.Sprintf("        %s[(\"Topic: %s\")]:::nodeTopic", topicNodeID, topicLabel))
-						addClick(topicNodeID, topicURL, topicTip)
-						addEdge(workNodeID, "-->", "primary topic", topicNodeID)
-						bookTopics = append(bookTopics, topicNodeID)
+			catalogTopics := extractCatalogTopics(book)
+			for _, term := range catalogTopics {
+				topicLabel := sanitizeMermaidLabel(term.Label)
+				topicNodeID := "Topic_" + slugify(term.Label)
+				addNode(&taxonomyNodes, topicNodeID, fmt.Sprintf("        %s[(\"Topic: %s\")]:::nodeTopic", topicNodeID, topicLabel))
+				addClick(topicNodeID, term.URL, term.Tooltip)
+				addEdge(workNodeID, "-->", "primary topic", topicNodeID)
+				bookTopics = append(bookTopics, topicNodeID)
 
-						// Disciplinary Taxonomy Bridge
-						subfieldNodeID := "Subfield_" + slugify("subfield_"+term.Label)
-						fieldNodeID := "Field_" + slugify("field_"+term.Label)
-						domainNodeID := "Domain_Science"
+				// Disciplinary Taxonomy Bridge
+				subfieldNodeID := "Subfield_" + slugify("subfield_"+term.Label)
+				fieldNodeID := "Field_" + slugify("field_"+term.Label)
+				domainNodeID := "Domain_Science"
 
-						addNode(&taxonomyNodes, subfieldNodeID, fmt.Sprintf("        %s[[\"Subfield: %s\"]]:::nodeTaxonomy", subfieldNodeID, topicLabel))
-						addClick(subfieldNodeID, "https://openalex.org/subfields", fmt.Sprintf("OpenAlex Subfield: %s", topicLabel))
+				addNode(&taxonomyNodes, subfieldNodeID, fmt.Sprintf("        %s[[\"Subfield: %s\"]]:::nodeTaxonomy", subfieldNodeID, topicLabel))
+				addClick(subfieldNodeID, "https://openalex.org/subfields", fmt.Sprintf("OpenAlex Subfield: %s", topicLabel))
 
-						addNode(&taxonomyNodes, fieldNodeID, fmt.Sprintf("        %s[[\"Field: Academic Field\"]]:::nodeTaxonomy", fieldNodeID))
-						addClick(fieldNodeID, "https://openalex.org/fields", "OpenAlex Academic Fields")
+				addNode(&taxonomyNodes, fieldNodeID, fmt.Sprintf("        %s[[\"Field: Academic Field\"]]:::nodeTaxonomy", fieldNodeID))
+				addClick(fieldNodeID, "https://openalex.org/fields", "OpenAlex Academic Fields")
 
-						addNode(&taxonomyNodes, domainNodeID, fmt.Sprintf("        %s[[\"Domain: Interdisciplinary Sciences\"]]:::nodeTaxonomy", domainNodeID))
-						addClick(domainNodeID, "https://openalex.org/domains", "OpenAlex Domains: Science")
+				addNode(&taxonomyNodes, domainNodeID, fmt.Sprintf("        %s[[\"Domain: Interdisciplinary Sciences\"]]:::nodeTaxonomy", domainNodeID))
+				addClick(domainNodeID, "https://openalex.org/domains", "OpenAlex Domains: Science")
 
-						addEdge(topicNodeID, "-->", "subfield of", subfieldNodeID)
-						addEdge(subfieldNodeID, "-->", "field of", fieldNodeID)
-						addEdge(fieldNodeID, "-->", "domain of", domainNodeID)
-					}
-				}
+				addEdge(topicNodeID, "-->", "subfield of", subfieldNodeID)
+				addEdge(subfieldNodeID, "-->", "field of", fieldNodeID)
+				addEdge(fieldNodeID, "-->", "domain of", domainNodeID)
 			}
 
 			// Fallback topic if no specific subjects

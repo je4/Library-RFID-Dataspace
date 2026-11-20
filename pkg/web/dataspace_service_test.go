@@ -588,3 +588,115 @@ func TestDataspaceReportEndpoint(t *testing.T) {
 		t.Errorf("expected ISBN in response, got %s", body)
 	}
 }
+
+func TestGenericUtilities(t *testing.T) {
+	// cleanAndDeduplicate
+	ints := cleanAndDeduplicate([]int{1, 2, 2, 3, 1, 4, 3})
+	if len(ints) != 4 || ints[0] != 1 || ints[1] != 2 || ints[2] != 3 || ints[3] != 4 {
+		t.Errorf("unexpected dedup ints: %v", ints)
+	}
+
+	// cleanStrings
+	strs := cleanStrings([]string{"  a ", "", "b", "  ", "a", "c", "b "})
+	if len(strs) != 3 || strs[0] != "a" || strs[1] != "b" || strs[2] != "c" {
+		t.Errorf("unexpected cleanStrings: %v", strs)
+	}
+
+	// mapSlice
+	mapped := mapSlice([]int{1, 2, 3}, func(x int) int { return x * 10 })
+	if len(mapped) != 3 || mapped[0] != 10 || mapped[1] != 20 || mapped[2] != 30 {
+		t.Errorf("unexpected mapSlice: %v", mapped)
+	}
+
+	// filterSlice
+	filtered := filterSlice([]int{1, 2, 3, 4, 5, 6}, func(x int) bool { return x%2 == 0 })
+	if len(filtered) != 3 || filtered[0] != 2 || filtered[1] != 4 || filtered[2] != 6 {
+		t.Errorf("unexpected filterSlice: %v", filtered)
+	}
+
+	// topKeysByFrequency
+	freq := map[string]int{
+		"Physics":          10,
+		"Computer Science": 25,
+		"Mathematics":      15,
+		"Biology":          5,
+	}
+	top2 := topKeysByFrequency(freq, 2)
+	if len(top2) != 2 || top2[0] != "Computer Science" || top2[1] != "Mathematics" {
+		t.Errorf("unexpected topKeysByFrequency: %v", top2)
+	}
+}
+
+func TestCatalogExtractionHelpers(t *testing.T) {
+	book := &catalog.Book{
+		ID: "oai:alma.41SLSP_FNW:123456",
+		Titles: []catalog.Title{
+			{Title: "Quantum Mechanics", SubTitle: "A Modern Development"},
+		},
+		ISBNs: []catalog.ISBN{
+			{Enriched: "978-981-02-4105-6"},
+			{ID: "9810241054"},
+		},
+		Publications: []catalog.Publication{
+			{
+				DateString: "2000",
+				Publisher:  []string{"World Scientific", "Singapore"},
+			},
+		},
+		Identifiers: []string{
+			"doi:10.1142/4113",
+			"other-identifier",
+		},
+		Holdings: []catalog.Holding{
+			{CallNumber: "530.12 BAL"},
+		},
+		PersonalNames: []map[string]catalog.Name{
+			{"aut": {NamePart: "Ballentine, Leslie E.", Identifier: "(DE-588)1145355609"}},
+		},
+		Subjects: catalog.Subject{
+			Topic: []map[string]catalog.SubjectTerm{
+				{"top": {Label: "Quantum theory", Identifier: "(DE-588)4047992-4"}},
+			},
+		},
+	}
+
+	title, subtitle := extractBookTitle(book, "fallback")
+	if title != "Quantum Mechanics" || subtitle != "A Modern Development" {
+		t.Errorf("unexpected title/subtitle: %s, %s", title, subtitle)
+	}
+
+	primaryISBN := extractPrimaryISBN(book)
+	if primaryISBN != "978-981-02-4105-6" {
+		t.Errorf("unexpected primary ISBN: %s", primaryISBN)
+	}
+
+	allISBNs := extractAllISBNs(book)
+	if len(allISBNs) != 2 || allISBNs[0] != "978-981-02-4105-6" || allISBNs[1] != "9810241054" {
+		t.Errorf("unexpected all ISBNs: %v", allISBNs)
+	}
+
+	callNum := extractBookCallNumber(book)
+	if callNum != "530.12 BAL" {
+		t.Errorf("unexpected call number: %s", callNum)
+	}
+
+	pubYear, pubName := extractBookPublisher(book)
+	if pubYear != "2000" || pubName != "World Scientific, Singapore" {
+		t.Errorf("unexpected publisher: %s, %s", pubYear, pubName)
+	}
+
+	dois := extractBookDOIs(book)
+	if len(dois) != 1 || dois[0] != "doi:10.1142/4113" {
+		t.Errorf("unexpected dois: %v", dois)
+	}
+
+	authors := extractCatalogAuthors(book)
+	if len(authors) != 1 || authors[0].Name != "Ballentine, Leslie E." || authors[0].GNDID != "1145355609" {
+		t.Errorf("unexpected authors: %+v", authors)
+	}
+
+	topics := extractCatalogTopics(book)
+	if len(topics) != 1 || topics[0].Label != "Quantum theory" || topics[0].Identifier != "(DE-588)4047992-4" {
+		t.Errorf("unexpected topics: %+v", topics)
+	}
+}
