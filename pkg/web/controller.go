@@ -47,6 +47,7 @@ type Controller struct {
 	hub               *desk.Hub
 	rfidClient        libraryclient.Client
 	catalogService    *catalogService
+	dataspaceService  *dataspaceService
 }
 
 // NewController creates and initializes the Web Controller instance.
@@ -74,6 +75,7 @@ func NewController(cfg Config) (*Controller, error) {
 	if cfg.CatalogSearch != nil {
 		ctrl.catalogService = newCatalogService(cfg.CatalogSearch)
 	}
+	ctrl.dataspaceService = newDataspaceService(cfg.CatalogSearch)
 
 	// Compile templates for all supported languages
 	ctrl.languageTemplates = make(map[string]*template.Template)
@@ -105,6 +107,7 @@ func NewController(cfg Config) (*Controller, error) {
 	router.GET("/", ctrl.HandleLoan)
 	router.GET("/loan", ctrl.HandleLoan)
 	router.GET("/dataspace", ctrl.HandleLoan)
+	router.GET("/dataspace/graph", ctrl.handleDataspaceGraph)
 	router.GET("/catalog", ctrl.handleCatalog)
 	router.GET("/events", ctrl.HandleEventsStream)
 	router.POST("/loan/afi/:action", ctrl.HandleAFIAction)
@@ -125,6 +128,7 @@ func NewController(cfg Config) (*Controller, error) {
 		channelGroup.GET("/", ctrl.HandleChannelRoot)
 		channelGroup.GET("/loan", ctrl.HandleLoan)
 		channelGroup.GET("/dataspace", ctrl.HandleLoan)
+		channelGroup.GET("/dataspace/graph", ctrl.handleDataspaceGraph)
 		channelGroup.GET("/catalog", ctrl.handleCatalog)
 		channelGroup.GET("/events", ctrl.HandleEventsStream)
 		channelGroup.POST("/loan/afi/:action", ctrl.HandleAFIAction)

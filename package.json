@@ -8,5 +8,8 @@
   },
   "devDependencies": {
     "sass": "^1.108.2"
+  },
+  "dependencies": {
+    "mermaid": "^12.3.0"
   }
 }

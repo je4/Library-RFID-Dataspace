@@ -19,6 +19,7 @@
     <link rel="stylesheet" href="{{.StaticPath}}/css/daisyui-themes.min.css">
     <script src="{{.StaticPath}}/js/htmx-4.0.js"></script>
     <script src="{{.StaticPath}}/js/hx-sse.js"></script>
+    <script src="{{.StaticPath}}/js/mermaid.min.js"></script>
     <link rel="stylesheet" href="{{.StaticPath}}/scss/dataspace.css">
 </head>
 <body class="min-h-screen flex flex-col justify-between selection:bg-primary selection:text-primary-content p-4 sm:p-6 lg:p-8" sse-connect="events" data-sse-connect="events" hx-ext="sse">
@@ -29,7 +30,7 @@
     <main class="w-full max-w-7xl mx-auto flex-1 flex flex-col gap-4">
 
         <!-- Active Media Table & Control Panel -->
-        <section class="card bg-base-100 border border-base-200 shadow-sm rounded-2xl overflow-hidden flex-1 flex flex-col">
+        <section class="card bg-base-100 border border-base-200 shadow-sm rounded-2xl overflow-hidden flex flex-col">
             <!-- Action Toolbar -->
             <div class="px-5 sm:px-6 py-3.5 sm:py-4 border-b border-base-200 flex flex-wrap items-center justify-between gap-4">
                 <div class="flex items-center space-x-3">
@@ -46,7 +47,7 @@
             </div>
 
             <!-- Active Tags Table with SSE Connection -->
-            <div class="transponder-stream-scroll flex-1 overflow-x-auto">
+            <div class="transponder-stream-scroll max-h-72 overflow-y-auto overflow-x-auto">
                 <table class="table table-zebra table-pin-rows w-full text-left border-collapse">
                     <thead class="sticky top-0 z-10 bg-base-200 text-base-content/80 font-bold">
                         <tr class="text-[11px] font-semibold uppercase tracking-wider text-base-content/70">
@@ -62,6 +63,90 @@
                         {{template "loan_table.gohtml" .}}
                     </tbody>
                 </table>
+            </div>
+        </section>
+
+        <!-- Dataspace Knowledge Graph Section (Mermaid Diagram) -->
+        <section id="dataspace-graph-section" class="card bg-base-100 border border-base-200 shadow-sm rounded-2xl overflow-hidden flex flex-col min-h-[520px]">
+            <!-- Action / Toolbar Header -->
+            <div class="px-5 sm:px-6 py-3.5 sm:py-4 border-b border-base-200 flex flex-wrap items-center justify-between gap-4 bg-base-100">
+                <div class="flex items-center space-x-3">
+                    <div class="w-9 h-9 rounded-xl bg-primary/10 text-primary flex items-center justify-center shrink-0">
+                        <img src="{{.StaticPath}}/img/icons/chip.svg" class="w-5 h-5" alt="Graph" />
+                    </div>
+                    <div>
+                        <h2 class="text-base font-semibold flex items-center gap-2">
+                            <span>{{tr "dataspace.graphTitle"}}</span>
+                            <span id="graph-node-count-badge" class="badge badge-sm badge-primary font-mono hidden">0 Nodes</span>
+                        </h2>
+                        <p class="text-xs text-base-content/70">{{tr "dataspace.graphSubtitle"}}</p>
+                    </div>
+                </div>
+
+                <!-- Graph Toolbar Controls -->
+                <div class="flex items-center gap-2 flex-wrap">
+                    <!-- Orientation Toggle -->
+                    <div class="join border border-base-300 rounded-lg p-0.5 bg-base-200/50">
+                        <button type="button" id="graph-dir-td" class="btn btn-xs join-item btn-primary" title="{{tr "dataspace.dirTD"}}">TD ↓</button>
+                        <button type="button" id="graph-dir-lr" class="btn btn-xs join-item btn-ghost" title="{{tr "dataspace.dirLR"}}">LR →</button>
+                    </div>
+
+                    <!-- Zoom Controls -->
+                    <div class="join border border-base-300 rounded-lg p-0.5 bg-base-200/50">
+                        <button type="button" id="graph-zoom-in" class="btn btn-xs join-item btn-ghost font-bold" title="{{tr "dataspace.zoomIn"}}">+</button>
+                        <button type="button" id="graph-zoom-reset" class="btn btn-xs join-item btn-ghost text-[10px]" title="{{tr "dataspace.zoomReset"}}">100%</button>
+                        <button type="button" id="graph-zoom-out" class="btn btn-xs join-item btn-ghost font-bold" title="{{tr "dataspace.zoomOut"}}">−</button>
+                    </div>
+
+                    <!-- Fullscreen Toggle -->
+                    <button type="button" id="graph-fullscreen-btn" class="btn btn-xs btn-outline gap-1" title="{{tr "dataspace.fullscreen"}}">
+                        <img src="{{.StaticPath}}/img/icons/external-link.svg" class="w-3.5 h-3.5" alt="Fullscreen" />
+                        <span class="hidden sm:inline">{{tr "dataspace.expand"}}</span>
+                    </button>
+
+                    <!-- Refresh Button -->
+                    <button type="button" id="graph-refresh-btn" class="btn btn-xs btn-ghost btn-square" title="{{tr "dataspace.refresh"}}">
+                        <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.85.83 6.72 2.24L21 8"/><path d="M21 3v5h-5"/></svg>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Mermaid Graph Visualizer Container -->
+            <div id="dataspace-graph-viewport" class="relative flex-1 w-full min-h-[460px] bg-base-200/30 overflow-hidden flex items-center justify-center p-4">
+                <!-- Loading Spinner State -->
+                <div id="dataspace-graph-loading" class="hidden absolute inset-0 bg-base-100/60 backdrop-blur-xs flex flex-col items-center justify-center z-20">
+                    <span class="loading loading-spinner loading-lg text-primary"></span>
+                    <span class="text-xs font-medium text-base-content/80 mt-2">{{tr "dataspace.loadingGraph"}}</span>
+                </div>
+
+                <!-- Empty State -->
+                <div id="dataspace-graph-empty" class="flex flex-col items-center justify-center text-center p-8 max-w-md mx-auto space-y-3">
+                    <div class="w-16 h-16 rounded-2xl bg-base-200 flex items-center justify-center text-base-content/40">
+                        <img src="{{.StaticPath}}/img/icons/empty-tags.svg" class="w-10 h-10 opacity-50" alt="Empty" />
+                    </div>
+                    <h3 class="font-semibold text-base text-base-content/90">{{tr "dataspace.emptyTitle"}}</h3>
+                    <p class="text-xs text-base-content/60 leading-relaxed">{{tr "dataspace.emptyDescription"}}</p>
+                </div>
+
+                <!-- Rendered Mermaid SVG Container -->
+                <div id="dataspace-mermaid-output" class="w-full h-full flex items-center justify-center overflow-auto cursor-grab active:cursor-grabbing"></div>
+            </div>
+
+            <!-- Legend Footer Bar -->
+            <div class="px-5 py-2.5 border-t border-base-200 bg-base-100/80 text-[11px] flex flex-wrap items-center justify-between gap-2">
+                <div class="flex items-center gap-1.5 text-base-content/60 font-semibold mr-1">
+                    <span>{{tr "dataspace.legend"}}:</span>
+                </div>
+                <div class="flex flex-wrap items-center gap-2">
+                    <span class="badge badge-xs text-[10px] font-medium py-2 px-2.5 bg-[#10b981] text-white border-0">{{tr "dataspace.legendTag"}}</span>
+                    <span class="badge badge-xs text-[10px] font-medium py-2 px-2.5 bg-[#2563eb] text-white border-0">{{tr "dataspace.legendAlma"}}</span>
+                    <span class="badge badge-xs text-[10px] font-medium py-2 px-2.5 bg-[#4f46e5] text-white border-0">{{tr "dataspace.legendWork"}}</span>
+                    <span class="badge badge-xs text-[10px] font-medium py-2 px-2.5 bg-[#d97706] text-white border-0">{{tr "dataspace.legendAuthor"}}</span>
+                    <span class="badge badge-xs text-[10px] font-medium py-2 px-2.5 bg-[#7c3aed] text-white border-0">{{tr "dataspace.legendTopic"}}</span>
+                    <span class="badge badge-xs text-[10px] font-medium py-2 px-2.5 bg-[#0891b2] text-white border-0">{{tr "dataspace.legendTaxonomy"}}</span>
+                    <span class="badge badge-xs text-[10px] font-medium py-2 px-2.5 bg-[#475569] text-white border-0">{{tr "dataspace.legendInst"}}</span>
+                    <span class="badge badge-xs text-[10px] font-medium py-2 px-2.5 bg-[#0d9488] text-white border-0">{{tr "dataspace.legendSource"}}</span>
+                </div>
             </div>
         </section>
 

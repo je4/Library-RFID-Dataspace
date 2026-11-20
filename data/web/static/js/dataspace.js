@@ -10,6 +10,7 @@ import { initEncodeController } from './modules/encode-controller.js';
 import { initShortcuts } from './modules/shortcuts.js';
 import { initCatalog } from './modules/catalog.js';
 import { initGateAlarm } from './modules/gate-alarm.js';
+import { initDataspaceGraph } from './modules/dataspace-graph.js';
 
 export function initDataspace() {
     document.getElementById('language-selector')?.addEventListener('change', event => {
@@ -29,6 +30,7 @@ export function initDataspace() {
     initShortcuts();
     initCatalog();
     initGateAlarm();
+    initDataspaceGraph();
 }
 
 if (document.readyState === 'loading') {
