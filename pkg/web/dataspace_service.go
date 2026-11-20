@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"net/http"
+	"net/url"
 	"regexp"
 	"strings"
 	"time"
@@ -18,6 +19,7 @@ import (
 var (
 	nonAlphanumericRegex = regexp.MustCompile(`[^a-zA-Z0-9_]+`)
 	whitespaceRegex      = regexp.MustCompile(`\s+`)
+	gndExtractionRegex   = regexp.MustCompile(`(?i)(?:https?://(?:d-nb\.info|lobid\.org)/gnd/|\(DE-588[a-z]?\)|\(DE-101\)|gnd:?|gnd/)?([0-9X-]{7,15})`)
 )
 
 // DataspaceGraphResponse represents the JSON payload returned to the frontend.
@@ -129,6 +131,147 @@ func slugify(text string) string {
 	return clean + "_" + hashPrefix
 }
 
+func extractGNDID(identifier string) string {
+	identifier = strings.TrimSpace(identifier)
+	if identifier == "" {
+		return ""
+	}
+	m := gndExtractionRegex.FindStringSubmatch(identifier)
+	if len(m) > 1 && len(m[1]) >= 7 {
+		return m[1]
+	}
+	return ""
+}
+
+func buildSwisscoveryURL(book *catalog.Book, fallbackQuery string) string {
+	queryVal := fallbackQuery
+	if book != nil {
+		if book.ID != "" {
+			id := book.ID
+			if idx := strings.LastIndex(id, ":"); idx != -1 {
+				id = id[idx+1:]
+			}
+			queryVal = id
+		} else if len(book.ISBNs) > 0 {
+			if book.ISBNs[0].Enriched != "" {
+				queryVal = book.ISBNs[0].Enriched
+			} else if book.ISBNs[0].ID != "" {
+				queryVal = book.ISBNs[0].ID
+			}
+		} else if len(book.Titles) > 0 && book.Titles[0].Title != "" {
+			queryVal = book.Titles[0].Title
+		}
+	}
+	return fmt.Sprintf("https://swisscovery.ch/discovery/search?query=any,contains,%s&tab=41SLSP_NETWORK&search_scope=DN_and_CI&vid=41SLSP_NETWORK:VU1_UNION", url.QueryEscape(queryVal))
+}
+
+func buildInkDetailURL(signature, fallbackURL string) string {
+	if signature != "" {
+		return fmt.Sprintf("https://mediathek.hgk.fhnw.ch/ink/detail/%s/de", url.PathEscape(signature))
+	}
+	if fallbackURL != "" {
+		return fallbackURL
+	}
+	return "https://mediathek.hgk.fhnw.ch/ink/de"
+}
+
+func buildOpenAlexWorkURL(doi, isbn, title string) string {
+	if doi != "" {
+		cleanDOI := strings.TrimPrefix(doi, "https://doi.org/")
+		cleanDOI = strings.TrimPrefix(cleanDOI, "http://doi.org/")
+		cleanDOI = strings.TrimPrefix(cleanDOI, "doi:")
+		return fmt.Sprintf("https://openalex.org/works?search=%s", url.QueryEscape(cleanDOI))
+	}
+	if isbn != "" {
+		return fmt.Sprintf("https://openalex.org/works?search=%s", url.QueryEscape(isbn))
+	}
+	if title != "" {
+		return fmt.Sprintf("https://openalex.org/works?search=%s", url.QueryEscape(title))
+	}
+	return "https://openalex.org/works"
+}
+
+func buildAuthorOrGNDURL(identifier, name string) (urlStr string, tooltip string) {
+	if gndID := extractGNDID(identifier); gndID != "" {
+		return fmt.Sprintf("https://lobid.org/gnd/%s", url.PathEscape(gndID)), fmt.Sprintf("GND: %s (lobid.org)", gndID)
+	}
+	if name != "" {
+		return fmt.Sprintf("https://openalex.org/authors?search=%s", url.QueryEscape(name)), fmt.Sprintf("OpenAlex Author: %s", name)
+	}
+	return "https://openalex.org/authors", "OpenAlex Authors"
+}
+
+func buildTopicOrGNDURL(identifier, label string) (urlStr string, tooltip string) {
+	if gndID := extractGNDID(identifier); gndID != "" {
+		return fmt.Sprintf("https://lobid.org/gnd/%s", url.PathEscape(gndID)), fmt.Sprintf("GND: %s (lobid.org)", gndID)
+	}
+	if label != "" {
+		return fmt.Sprintf("https://openalex.org/topics?search=%s", url.QueryEscape(label)), fmt.Sprintf("OpenAlex Topic: %s", label)
+	}
+	return "https://openalex.org/topics", "OpenAlex Topics"
+}
+
+func buildOpenAlexInstitutionURL(name string) string {
+	if name != "" {
+		return fmt.Sprintf("https://openalex.org/institutions?search=%s", url.QueryEscape(name))
+	}
+	return "https://openalex.org/institutions"
+}
+
+func buildOpenAlexSourceURL(name string) string {
+	if name != "" {
+		return fmt.Sprintf("https://openalex.org/sources?search=%s", url.QueryEscape(name))
+	}
+	return "https://openalex.org/sources"
+}
+
+func buildOpenAlexPublisherURL(pubID, name string) string {
+	if pubID != "" && (strings.HasPrefix(pubID, "P") || strings.HasPrefix(pubID, "https://openalex.org/P")) {
+		cleanID := strings.TrimPrefix(pubID, "https://openalex.org/publishers/")
+		cleanID = strings.TrimPrefix(cleanID, "https://openalex.org/")
+		return fmt.Sprintf("https://openalex.org/publishers/%s", cleanID)
+	}
+	if name != "" {
+		return fmt.Sprintf("https://openalex.org/publishers?search=%s", url.QueryEscape(name))
+	}
+	return "https://openalex.org/publishers"
+}
+
+func buildOpenAlexTypeURL(workType string) string {
+	if workType != "" {
+		return fmt.Sprintf("https://openalex.org/types/%s", url.PathEscape(strings.ToLower(strings.TrimSpace(workType))))
+	}
+	return "https://openalex.org/types"
+}
+
+func buildOpenAlexInstitutionTypeURL(instType string) string {
+	if instType != "" {
+		return fmt.Sprintf("https://openalex.org/institution-types/%s", url.PathEscape(strings.ToLower(strings.TrimSpace(instType))))
+	}
+	return "https://openalex.org/institution-types"
+}
+
+func buildOpenAlexSourceTypeURL(sourceType string) string {
+	if sourceType != "" {
+		return fmt.Sprintf("https://openalex.org/source-types/%s", url.PathEscape(strings.ToLower(strings.TrimSpace(sourceType))))
+	}
+	return "https://openalex.org/source-types"
+}
+
+func buildOpenAlexIndexURL(indexName string) string {
+	if indexName != "" {
+		return fmt.Sprintf("https://openalex.org/indexes/%s", url.PathEscape(strings.ToLower(strings.TrimSpace(indexName))))
+	}
+	return "https://openalex.org/indexes"
+}
+
+func buildOpenAlexSourceListURL(listName string) string {
+	if listName != "" {
+		return fmt.Sprintf("https://openalex.org/source-lists/%s", url.PathEscape(strings.ToLower(strings.TrimSpace(listName))))
+	}
+	return "https://openalex.org/source-lists"
+}
+
 // GenerateMermaid builds a Mermaid flowchart string connecting Alma records and OpenAlex entities.
 func (s *dataspaceService) GenerateMermaid(ctx context.Context, barcodes []string, direction string) (DataspaceGraphResponse, error) {
 	dir := strings.ToUpper(strings.TrimSpace(direction))
@@ -187,9 +330,11 @@ func (s *dataspaceService) buildGraph(ctx context.Context, cleanBarcodes []strin
 	var scholarlyNodes []string
 	var taxonomyNodes []string
 	var edges []string
+	var clicks []string
 
 	nodesMap := make(map[string]bool)
 	edgesMap := make(map[string]bool)
+	clicksMap := make(map[string]bool)
 
 	addNode := func(list *[]string, id, def string) {
 		if !nodesMap[id] {
@@ -208,6 +353,20 @@ func (s *dataspaceService) buildGraph(ctx context.Context, cleanBarcodes []strin
 		if !edgesMap[edgeStr] {
 			edgesMap[edgeStr] = true
 			edges = append(edges, edgeStr)
+		}
+	}
+
+	addClick := func(nodeID, linkURL, tooltip string) {
+		if nodeID == "" || linkURL == "" {
+			return
+		}
+		linkURL = strings.ReplaceAll(linkURL, "\"", "")
+		linkURL = strings.TrimSpace(linkURL)
+		tooltip = sanitizeMermaidLabel(tooltip)
+		clickDef := fmt.Sprintf("    click %s href \"%s\" \"%s\" _blank", nodeID, linkURL, tooltip)
+		if !clicksMap[nodeID] {
+			clicksMap[nodeID] = true
+			clicks = append(clicks, clickDef)
 		}
 	}
 
@@ -250,16 +409,19 @@ func (s *dataspaceService) buildGraph(ctx context.Context, cleanBarcodes []strin
 							inkLabel += fmt.Sprintf("<br/>Sig: %s", ink.Signature)
 						}
 						addNode(&inkNodes, inkID, fmt.Sprintf("        %s[\"%s\"]:::nodeInk", inkID, sanitizeMermaidLabel(inkLabel)))
+						addClick(inkID, buildInkDetailURL(ink.Signature, ink.URL), fmt.Sprintf("InK Mediathek HGK: %s", inkTitle))
 						addEdge(unresolvedID, "-->", "matched in InK", inkID)
 
 						if ink.CollectionTitle != "" {
 							collID := "InkColl_" + slugify(ink.CollectionTitle)
 							addNode(&inkNodes, collID, fmt.Sprintf("        %s[\"Collection: %s\"]:::nodeInk", collID, sanitizeMermaidLabel(ink.CollectionTitle)))
+							addClick(collID, "https://mediathek.hgk.fhnw.ch/ink/de", fmt.Sprintf("InK Sammlung: %s", ink.CollectionTitle))
 							addEdge(inkID, "-->", "collection", collID)
 						}
 
 						inkPortalID := "InkPortal"
 						addNode(&inkNodes, inkPortalID, "        InkPortal[\"Mediathek InK HGK<br/>mediathek.hgk.fhnw.ch/ink/de\"]:::nodeInk")
+						addClick(inkPortalID, "https://mediathek.hgk.fhnw.ch/ink/de", "Mediathek InK & Archive HGK")
 						addEdge(inkID, "-.->", "portal", inkPortalID)
 					}
 				}
@@ -303,6 +465,7 @@ func (s *dataspaceService) buildGraph(ctx context.Context, cleanBarcodes []strin
 			almaLabel += fmt.Sprintf("<br/>ISBN: %s", isbnStr)
 		}
 		addNode(&physicalNodes, almaNodeID, fmt.Sprintf("        %s[\"%s\"]:::nodeAlma", almaNodeID, sanitizeMermaidLabel(almaLabel)))
+		addClick(almaNodeID, buildSwisscoveryURL(book, it.barcode), fmt.Sprintf("Swisscovery: %s", titleStr))
 		addEdge(tagNodeID, "-->", "scanned on reader", almaNodeID)
 
 		// Holding libraries & Shelves
@@ -313,6 +476,7 @@ func (s *dataspaceService) buildGraph(ctx context.Context, cleanBarcodes []strin
 			}
 			libNodeID := "Lib_" + slugify(libName)
 			addNode(&physicalNodes, libNodeID, fmt.Sprintf("        %s[\"%s\"]:::nodeInst", libNodeID, sanitizeMermaidLabel(libName)))
+			addClick(libNodeID, buildOpenAlexInstitutionURL(libName), fmt.Sprintf("Bibliothek / Institution: %s", libName))
 			addEdge(almaNodeID, "-->", "held at", libNodeID)
 
 			if holding.CallNumber != "" {
@@ -335,7 +499,9 @@ func (s *dataspaceService) buildGraph(ctx context.Context, cleanBarcodes []strin
 					rawAuthorNames = append(rawAuthorNames, name.NamePart)
 					authName := sanitizeMermaidLabel(name.NamePart)
 					authNodeID := "Auth_" + slugify(name.NamePart)
+					authURL, authTip := buildAuthorOrGNDURL(name.Identifier, name.NamePart)
 					addNode(&scholarlyNodes, authNodeID, fmt.Sprintf("        %s{{\"Author: %s\"}}:::nodeAuthor", authNodeID, authName))
+					addClick(authNodeID, authURL, authTip)
 					addEdge(almaNodeID, "-->", "written by", authNodeID)
 					bookAuthors = append(bookAuthors, authNodeID)
 				}
@@ -347,7 +513,13 @@ func (s *dataspaceService) buildGraph(ctx context.Context, cleanBarcodes []strin
 					rawAuthorNames = append(rawAuthorNames, name.NamePart)
 					corpName := sanitizeMermaidLabel(name.NamePart)
 					corpNodeID := "Corp_" + slugify(name.NamePart)
+					corpURL, corpTip := buildAuthorOrGNDURL(name.Identifier, name.NamePart)
+					if !strings.Contains(corpURL, "lobid.org") {
+						corpURL = buildOpenAlexInstitutionURL(name.NamePart)
+						corpTip = fmt.Sprintf("Institution: %s", name.NamePart)
+					}
 					addNode(&scholarlyNodes, corpNodeID, fmt.Sprintf("        %s[\"Institution: %s\"]:::nodeInst", corpNodeID, corpName))
+					addClick(corpNodeID, corpURL, corpTip)
 					addEdge(almaNodeID, "-->", "contributed by", corpNodeID)
 				}
 			}
@@ -374,16 +546,19 @@ func (s *dataspaceService) buildGraph(ctx context.Context, cleanBarcodes []strin
 						inkLabel += fmt.Sprintf("<br/>Sig: %s", ink.Signature)
 					}
 					addNode(&inkNodes, inkNodeID, fmt.Sprintf("        %s[\"%s\"]:::nodeInk", inkNodeID, sanitizeMermaidLabel(inkLabel)))
+					addClick(inkNodeID, buildInkDetailURL(ink.Signature, ink.URL), fmt.Sprintf("InK Mediathek HGK: %s", inkTitle))
 					addEdge(almaNodeID, "-->", "digital item / media", inkNodeID)
 
 					if ink.CollectionTitle != "" {
 						collNodeID := "InkColl_" + slugify(ink.CollectionTitle)
 						addNode(&inkNodes, collNodeID, fmt.Sprintf("        %s[\"Collection: %s\"]:::nodeInk", collNodeID, sanitizeMermaidLabel(ink.CollectionTitle)))
+						addClick(collNodeID, "https://mediathek.hgk.fhnw.ch/ink/de", fmt.Sprintf("InK Sammlung: %s", ink.CollectionTitle))
 						addEdge(inkNodeID, "-->", "collection", collNodeID)
 					}
 
 					inkPortalID := "InkPortal"
 					addNode(&inkNodes, inkPortalID, "        InkPortal[\"Mediathek InK HGK<br/>mediathek.hgk.fhnw.ch/ink/de\"]:::nodeInk")
+					addClick(inkPortalID, "https://mediathek.hgk.fhnw.ch/ink/de", "Mediathek InK & Archive HGK")
 					addEdge(inkNodeID, "-.->", "portal", inkPortalID)
 
 					// Connect author node if matched
@@ -406,6 +581,7 @@ func (s *dataspaceService) buildGraph(ctx context.Context, cleanBarcodes []strin
 			workLabel += fmt.Sprintf("<br/>ISBN: %s", isbnStr)
 		}
 		addNode(&scholarlyNodes, workNodeID, fmt.Sprintf("        %s[\"%s\"]:::nodeWork", workNodeID, sanitizeMermaidLabel(workLabel)))
+		addClick(workNodeID, buildOpenAlexWorkURL("", isbnStr, titleStr), fmt.Sprintf("OpenAlex Work: %s", titleStr))
 		addEdge(almaNodeID, "-.->", "resolves to", workNodeID)
 
 		for _, authID := range bookAuthors {
@@ -418,6 +594,7 @@ func (s *dataspaceService) buildGraph(ctx context.Context, cleanBarcodes []strin
 				if publisher != "" {
 					pubNodeID := "Pub_" + slugify(publisher)
 					addNode(&scholarlyNodes, pubNodeID, fmt.Sprintf("        %s[/\"Publisher: %s\"/]:::nodeSource", pubNodeID, sanitizeMermaidLabel(publisher)))
+					addClick(pubNodeID, buildOpenAlexSourceURL(publisher), fmt.Sprintf("OpenAlex Source: %s", publisher))
 					addEdge(workNodeID, "-->", "published by", pubNodeID)
 				}
 			}
@@ -430,7 +607,9 @@ func (s *dataspaceService) buildGraph(ctx context.Context, cleanBarcodes []strin
 				if term.Label != "" {
 					topicLabel := sanitizeMermaidLabel(term.Label)
 					topicNodeID := "Topic_" + slugify(term.Label)
+					topicURL, topicTip := buildTopicOrGNDURL(term.Identifier, term.Label)
 					addNode(&taxonomyNodes, topicNodeID, fmt.Sprintf("        %s[(\"Topic: %s\")]:::nodeTopic", topicNodeID, topicLabel))
+					addClick(topicNodeID, topicURL, topicTip)
 					addEdge(workNodeID, "-->", "primary topic", topicNodeID)
 					bookTopics = append(bookTopics, topicNodeID)
 
@@ -440,8 +619,13 @@ func (s *dataspaceService) buildGraph(ctx context.Context, cleanBarcodes []strin
 					domainNodeID := "Domain_Science"
 
 					addNode(&taxonomyNodes, subfieldNodeID, fmt.Sprintf("        %s[[\"Subfield: %s\"]]:::nodeTaxonomy", subfieldNodeID, topicLabel))
+					addClick(subfieldNodeID, "https://openalex.org/subfields", fmt.Sprintf("OpenAlex Subfield: %s", topicLabel))
+
 					addNode(&taxonomyNodes, fieldNodeID, fmt.Sprintf("        %s[[\"Field: Academic Field\"]]:::nodeTaxonomy", fieldNodeID))
+					addClick(fieldNodeID, "https://openalex.org/fields", "OpenAlex Academic Fields")
+
 					addNode(&taxonomyNodes, domainNodeID, fmt.Sprintf("        %s[[\"Domain: Interdisciplinary Sciences\"]]:::nodeTaxonomy", domainNodeID))
+					addClick(domainNodeID, "https://openalex.org/domains", "OpenAlex Domains: Science")
 
 					addEdge(topicNodeID, "-->", "subfield of", subfieldNodeID)
 					addEdge(subfieldNodeID, "-->", "field of", fieldNodeID)
@@ -456,7 +640,9 @@ func (s *dataspaceService) buildGraph(ctx context.Context, cleanBarcodes []strin
 				if localSub != "" {
 					topicLabel := sanitizeMermaidLabel(localSub)
 					topicNodeID := "Topic_" + slugify(localSub)
+					topicURL, topicTip := buildTopicOrGNDURL("", localSub)
 					addNode(&taxonomyNodes, topicNodeID, fmt.Sprintf("        %s[(\"Subject: %s\")]:::nodeTopic", topicNodeID, topicLabel))
+					addClick(topicNodeID, topicURL, topicTip)
 					addEdge(workNodeID, "-->", "treats topic", topicNodeID)
 					bookTopics = append(bookTopics, topicNodeID)
 				}
@@ -466,8 +652,13 @@ func (s *dataspaceService) buildGraph(ctx context.Context, cleanBarcodes []strin
 		if len(bookTopics) == 0 {
 			genericTopicID := fmt.Sprintf("Topic_Gen_%d", i+1)
 			genericSubfieldID := fmt.Sprintf("Subfield_Gen_%d", i+1)
+			genericURL, genericTip := buildTopicOrGNDURL("", titleStr)
 			addNode(&taxonomyNodes, genericTopicID, fmt.Sprintf("        %s[(\"Research Topic: %s\")]:::nodeTopic", genericTopicID, sanitizeMermaidLabel(titleStr)))
+			addClick(genericTopicID, genericURL, genericTip)
+
 			addNode(&taxonomyNodes, genericSubfieldID, fmt.Sprintf("        %s[[\"Disciplinary Field\"]]:::nodeTaxonomy", genericSubfieldID))
+			addClick(genericSubfieldID, "https://openalex.org/subfields", "OpenAlex Disciplinary Field")
+
 			addEdge(workNodeID, "-->", "primary topic", genericTopicID)
 			addEdge(genericTopicID, "-->", "subfield of", genericSubfieldID)
 		}
@@ -558,6 +749,13 @@ func (s *dataspaceService) buildGraph(ctx context.Context, cleanBarcodes []strin
 
 	for _, e := range edges {
 		sb.WriteString(e + "\n")
+	}
+
+	if len(clicks) > 0 {
+		sb.WriteString("\n")
+		for _, c := range clicks {
+			sb.WriteString(c + "\n")
+		}
 	}
 
 	sb.WriteString("\n")

@@ -238,6 +238,12 @@ export async function fetchAndRenderGraph(immediate = false, force = false) {
                 svgElement.style.height = 'auto';
                 svgElement.style.maxHeight = '75vh';
                 svgElement.classList.add('select-none');
+
+                // Ensure all links open securely in new tabs
+                svgElement.querySelectorAll('a').forEach(a => {
+                    a.setAttribute('target', '_blank');
+                    a.setAttribute('rel', 'noopener noreferrer');
+                });
             }
 
             lastBarcodesKey = barcodesKey;
@@ -333,10 +339,17 @@ export function initDataspaceGraph() {
         applyZoom(delta);
     }, { passive: false });
 
+    let hasMovedDrag = false;
+    let mouseDownClientX = 0;
+    let mouseDownClientY = 0;
+
     // Pan drag interactions
     viewport.addEventListener('mousedown', (e) => {
         if (e.button !== 0 || !output.querySelector('svg')) return;
         isDragging = true;
+        hasMovedDrag = false;
+        mouseDownClientX = e.clientX;
+        mouseDownClientY = e.clientY;
         startX = e.clientX - panX;
         startY = e.clientY - panY;
         viewport.style.cursor = 'grabbing';
@@ -344,6 +357,9 @@ export function initDataspaceGraph() {
 
     window.addEventListener('mousemove', (e) => {
         if (!isDragging) return;
+        if (Math.abs(e.clientX - mouseDownClientX) > 4 || Math.abs(e.clientY - mouseDownClientY) > 4) {
+            hasMovedDrag = true;
+        }
         panX = e.clientX - startX;
         panY = e.clientY - startY;
         updateTransform(output);
@@ -355,6 +371,15 @@ export function initDataspaceGraph() {
             viewport.style.cursor = '';
         }
     });
+
+    // Prevent accidental link navigation when dragging/panning
+    viewport.addEventListener('click', (e) => {
+        if (hasMovedDrag) {
+            e.preventDefault();
+            e.stopPropagation();
+            hasMovedDrag = false;
+        }
+    }, true);
 
     // Fullscreen state helpers
     const isSectionFullscreen = () => {
