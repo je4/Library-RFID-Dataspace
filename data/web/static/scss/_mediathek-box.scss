@@ -19,7 +19,8 @@
     .box,
     .modal-box,
     .stats,
-    .tabs-boxed,
+    nav > .tabs-boxed,
+    .nav-tabs-boxed,
     .nav-stat-pill {
         position: relative;
         border-radius: var(--mediathek-box-radius, 0px) !important;
@@ -99,7 +100,8 @@
     .box,
     .modal-box,
     .stats,
-    .tabs-boxed,
+    nav > .tabs-boxed,
+    .nav-tabs-boxed,
     .nav-stat-pill {
         .stat {
             border-radius: 0 !important;
@@ -203,7 +205,8 @@
     .box,
     .modal-box,
     .stats,
-    .tabs-boxed,
+    nav > .tabs-boxed,
+    .nav-tabs-boxed,
     .nav-stat-pill {
         .stat {
             border-radius: 0 !important;

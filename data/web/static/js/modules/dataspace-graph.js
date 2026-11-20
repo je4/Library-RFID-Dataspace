@@ -558,16 +558,28 @@ export function initDataspaceGraph() {
     const switchTab = (tab) => {
         currentActiveTab = tab;
         if (tab === 'graph') {
-            if (tabBtnGraph) tabBtnGraph.classList.add('tab-active');
-            if (tabBtnReport) tabBtnReport.classList.remove('tab-active');
+            if (tabBtnGraph) {
+                tabBtnGraph.classList.add('tab-active', 'active');
+                tabBtnGraph.setAttribute('aria-selected', 'true');
+            }
+            if (tabBtnReport) {
+                tabBtnReport.classList.remove('tab-active', 'active');
+                tabBtnReport.setAttribute('aria-selected', 'false');
+            }
             if (graphToolbar) graphToolbar.classList.remove('hidden');
             if (reportToolbar) reportToolbar.classList.add('hidden');
             if (graphPane) graphPane.classList.remove('hidden');
             if (reportPane) reportPane.classList.add('hidden');
             updateTransform(output);
         } else {
-            if (tabBtnReport) tabBtnReport.classList.add('tab-active');
-            if (tabBtnGraph) tabBtnGraph.classList.remove('tab-active');
+            if (tabBtnReport) {
+                tabBtnReport.classList.add('tab-active', 'active');
+                tabBtnReport.setAttribute('aria-selected', 'true');
+            }
+            if (tabBtnGraph) {
+                tabBtnGraph.classList.remove('tab-active', 'active');
+                tabBtnGraph.setAttribute('aria-selected', 'false');
+            }
             if (reportToolbar) reportToolbar.classList.remove('hidden');
             if (graphToolbar) graphToolbar.classList.add('hidden');
             if (reportPane) reportPane.classList.remove('hidden');
