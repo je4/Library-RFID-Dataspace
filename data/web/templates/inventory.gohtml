@@ -210,16 +210,16 @@
             <!-- Table Container -->
             <div class="transponder-stream-scroll flex-1 overflow-x-auto">
                 <table class="table table-zebra table-pin-rows w-full text-left border-collapse">
-                    <thead class="sticky top-0 z-10 bg-base-200 text-base-content/80 font-bold">
-                        <tr class="text-[11px] font-semibold uppercase tracking-wider text-base-content/70">
-                            <th scope="col" class="py-3 px-4 sm:px-5 whitespace-nowrap">{{tr "encode.barcodeLabel"}}</th>
-                            <th scope="col" class="py-3 px-4 sm:px-5 whitespace-nowrap">{{tr "tag.uid"}}</th>
-                            <th scope="col" class="py-3 px-4 sm:px-5 whitespace-nowrap">{{tr "inventory.marker"}}</th>
-                            <th scope="col" class="py-3 px-4 sm:px-5 whitespace-nowrap">{{tr "library.isil"}}</th>
-                            <th scope="col" class="py-3 px-4 sm:px-5 whitespace-nowrap">{{tr "encode.part"}}</th>
-                            <th scope="col" class="py-3 px-4 sm:px-5 whitespace-nowrap">AFI</th>
-                            <th scope="col" class="py-3 px-4 sm:px-5 whitespace-nowrap">{{tr "webservice.status"}}</th>
-                            <th scope="col" class="py-3 px-4 sm:px-5 text-right whitespace-nowrap">{{tr "common.timestamp"}}</th>
+                    <thead>
+                        <tr>
+                            <th scope="col">{{tr "encode.barcodeLabel"}}</th>
+                            <th scope="col">{{tr "tag.uid"}}</th>
+                            <th scope="col">{{tr "inventory.marker"}}</th>
+                            <th scope="col">{{tr "library.isil"}}</th>
+                            <th scope="col">{{tr "encode.part"}}</th>
+                            <th scope="col">AFI</th>
+                            <th scope="col">{{tr "webservice.status"}}</th>
+                            <th scope="col" class="text-right">{{tr "common.timestamp"}}</th>
                         </tr>
                     </thead>
                     <tbody id="inventory-table-body">

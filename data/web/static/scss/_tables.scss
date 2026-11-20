@@ -2,6 +2,27 @@
 // Table Stream Scroll Container & Ergonomics
 // ==========================================================================
 
+// Standardized Table Cell & Header Styling across all Views
+.table {
+    th, td {
+        padding: 0.75rem 1rem; // py-3 px-4
+        vertical-align: middle;
+
+        @media (min-width: 640px) {
+            padding-left: 1.25rem; // sm:px-5
+            padding-right: 1.25rem;
+        }
+    }
+
+    thead th {
+        font-size: 0.6875rem; // 11px
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        white-space: nowrap;
+    }
+}
+
 .transponder-stream-scroll {
     overflow-y: auto;
     overflow-x: auto;

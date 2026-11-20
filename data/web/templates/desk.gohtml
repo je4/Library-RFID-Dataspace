@@ -66,16 +66,16 @@
             <!-- Tags Table with SSE Connection -->
             <div class="transponder-stream-scroll flex-1 overflow-x-auto">
                 <table class="table table-zebra table-pin-rows w-full text-left border-collapse">
-                    <thead class="sticky top-0 z-10 bg-base-200 text-base-content/80 font-bold">
-                        <tr class="text-[11px] font-semibold uppercase tracking-wider text-base-content/70">
-                            <th scope="col" class="py-3 px-4 sm:px-5 whitespace-nowrap">{{tr "item.id"}}</th>
-                            <th scope="col" class="py-3 px-4 sm:px-5 whitespace-nowrap">{{tr "tag.uid"}}</th>
-                            <th scope="col" class="py-3 px-4 sm:px-5 whitespace-nowrap">{{tr "reader.sender"}}</th>
-                            <th scope="col" class="py-3 px-4 sm:px-5 whitespace-nowrap">{{tr "library.isil"}}</th>
-                            <th scope="col" class="py-3 px-4 sm:px-5 whitespace-nowrap">{{tr "encode.parts"}}</th>
-                            <th scope="col" class="py-3 px-4 sm:px-5 whitespace-nowrap">{{tr "tag.crc"}}</th>
-                            <th scope="col" class="py-3 px-4 sm:px-5 whitespace-nowrap">{{tr "afi.label"}}</th>
-                            <th scope="col" class="py-3 px-4 sm:px-5 text-right whitespace-nowrap">{{tr "inventory.scanTime"}}</th>
+                    <thead>
+                        <tr>
+                            <th scope="col">{{tr "item.id"}}</th>
+                            <th scope="col">{{tr "tag.uid"}}</th>
+                            <th scope="col">{{tr "reader.sender"}}</th>
+                            <th scope="col">{{tr "library.isil"}}</th>
+                            <th scope="col">{{tr "encode.parts"}}</th>
+                            <th scope="col">{{tr "tag.crc"}}</th>
+                            <th scope="col">{{tr "afi.label"}}</th>
+                            <th scope="col" class="text-right">{{tr "inventory.scanTime"}}</th>
                         </tr>
                     </thead>
                     <tbody id="tags-table-body" sse-swap="tag_read" data-sse-swap="tag_read" hx-swap="afterbegin">

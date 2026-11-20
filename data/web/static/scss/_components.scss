@@ -589,3 +589,55 @@
         color: #000000 !important;
     }
 }
+
+// ==========================================================================
+// Theme Selection Dropdown Components & Micro-Controls
+// ==========================================================================
+
+.theme-menu-btn {
+    justify-content: space-between;
+    font-weight: 400;
+    padding-left: 0.5rem;
+    padding-right: 0.5rem;
+    height: auto;
+    min-height: 2rem;
+}
+
+.theme-preview-box {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.125rem;
+    padding: 0.25rem;
+    background-color: var(--color-base-100);
+    border: 1px solid color-mix(in oklab, var(--color-base-content) 10%, transparent);
+    border-radius: 0.375rem;
+    box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+    flex-shrink: 0;
+}
+
+.theme-preview-dot {
+    display: inline-block;
+    width: 0.375rem;
+    height: 0.875rem;
+    border-radius: 9999px;
+}
+
+.theme-check-icon,
+.theme-mode-check {
+    color: var(--color-primary);
+    font-weight: 700;
+    font-size: 0.75rem;
+    line-height: 1;
+}
+
+.copy-btn-xs {
+    width: 1.25rem;
+    height: 1.25rem;
+    min-height: 0;
+    padding: 0;
+    opacity: 0.7;
+
+    &:hover {
+        opacity: 1;
+    }
+}

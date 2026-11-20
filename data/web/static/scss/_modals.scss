@@ -25,9 +25,12 @@
     cursor: pointer;
     border-radius: 0.25rem;
     padding: 0.125rem;
-    margin: -0.125rem;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--color-primary);
     line-height: 1;
-    transition: transform 0.15s ease, opacity 0.15s ease;
+    transition: transform 0.15s ease, opacity 0.15s ease, color 0.15s ease;
 
     &:hover {
         transform: scale(1.15);
