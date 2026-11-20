@@ -225,14 +225,37 @@ flowchart TD
 
 ---
 
-### 5. Frontend Rendering Guidelines
+### 5. Deep Linking & Interactive Navigation
+
+The Mermaid flowchart integrates actionable deep links (`click <NodeID> href "<URL>" "<Tooltip>" _blank`) directly into the knowledge graph nodes, opening targeted catalog, authority, repository, and discovery pages in new browser tabs.
+
+| Target Platform / Entity | URL Pattern & Example | Node Target & Usage |
+| :--- | :--- | :--- |
+| **GND Authority (lobid.org)** | `https://lobid.org/gnd/{gndId}`<br/>*Example*: `https://lobid.org/gnd/118772295` | `nodeAuthor`, `nodeTopic` with extracted GND identifier (`(DE-588)...`) |
+| **Swisscovery Library Catalog** | `https://swisscovery.ch/discovery/search?query=any,contains,{mmsIdOrSearch}&tab=41SLSP_NETWORK&search_scope=DN_and_CI&vid=41SLSP_NETWORK:VU1_UNION`<br/>*Example*: `https://swisscovery.ch/discovery/search?query=any,contains,991170430529605501&tab=41SLSP_NETWORK&search_scope=DN_and_CI&vid=41SLSP_NETWORK:VU1_UNION` | `nodeAlma` (Physical Alma record / MMS ID search) |
+| **Mediathek HGK InK Detail** | `https://mediathek.hgk.fhnw.ch/ink/detail/{signature}/de`<br/>*Example*: `https://mediathek.hgk.fhnw.ch/ink/detail/zotero2-2068924.UHBBY3JP/de` | `nodeInk` (Individual media asset or student thesis) |
+| **Mediathek HGK InK Portal** | `https://mediathek.hgk.fhnw.ch/ink/de` | `nodeInk` (`InkPortal`, `InkColl_*` collections) |
+| **OpenAlex Works** | `https://openalex.org/works/{workId}` or `?search={isbn/title}`<br/>*Example*: `https://openalex.org/works/W642892681` | `nodeWork` (Scholarly publication node) |
+| **OpenAlex Authors** | `https://openalex.org/authors/{authorId}` or `?search={name}`<br/>*Example*: `https://openalex.org/authors/A5090064378` | `nodeAuthor` (Researcher profile without direct GND) |
+| **OpenAlex Institutions** | `https://openalex.org/institutions/{institutionId}` or `?search={name}`<br/>*Example*: `https://openalex.org/institutions/I118019719` | `nodeInst` (Universities, libraries, corporate contributors) |
+| **OpenAlex Publishers** | `https://openalex.org/publishers/{publisherId}` or `?search={name}`<br/>*Example*: `https://openalex.org/publishers/P4310320990` | `nodeSource` (Publishing houses and parent organizations) |
+| **OpenAlex Sources** | `https://openalex.org/sources/{sourceId}` or `?search={name}`<br/>*Example*: `https://openalex.org/sources/S7407052672` | `nodeSource` (Journals, conferences, repositories) |
+| **OpenAlex Types** | `https://openalex.org/types/{type}`<br/>*Example*: `https://openalex.org/types/article` | Work publication types (`article`, `book`, `thesis`) |
+| **OpenAlex Institution Types** | `https://openalex.org/institution-types/{type}`<br/>*Example*: `https://openalex.org/institution-types/education` | Institutional categories (`education`, `healthcare`, `facility`) |
+| **OpenAlex Source Types** | `https://openalex.org/source-types/{type}`<br/>*Example*: `https://openalex.org/source-types/repository` | Source venue categories (`repository`, `journal`, `conference`) |
+| **OpenAlex Indexes** | `https://openalex.org/indexes/{index}`<br/>*Example*: `https://openalex.org/indexes/crossref` | Bibliographic indexing registries (`crossref`, `doaj`) |
+| **OpenAlex Source Lists** | `https://openalex.org/source-lists/{list}`<br/>*Example*: `https://openalex.org/source-lists/cwts-core` | Curated source lists (`cwts-core`, `doaj`) |
+| **OpenAlex Topics** | `https://openalex.org/topics/{topicId}` or `?search={label}` | `nodeTopic` (Faceted research topics) |
+| **OpenAlex Subfields & Fields** | `https://openalex.org/subfields`, `https://openalex.org/fields`, `https://openalex.org/domains` | `nodeTaxonomy` (Taxonomy hierarchy nodes) |
+
+---
+
+### 6. Frontend Rendering Guidelines
 
 1. **Client-Side Mermaid Initialization**:
    * Include Mermaid library in the web bundle (`mermaid.min.js`).
-   * Initialize with dark/light theme awareness matching DaisyUI themes.
-2. **Dynamic Generation**:
-   * When WebSocket tag updates are processed, serialize the entity graph into the Mermaid DSL string.
-   * Target container element: `<div class="mermaid" id="dataspace-graph">...</div>`.
-   * Call `mermaid.run()` or `mermaid.render('graph-svg', dslString)` to update the DOM reactively.
-3. **Interactivity**:
-   * Attach click handlers to node IDs to open drawer/modal metadata views (e.g. Alma copy catalog flyout, OpenAlex source URL, ORCID profile, or Google Scholar search).
+   * Initialize with dark/light theme awareness matching DaisyUI themes and `securityLevel: 'loose'` to enable hyperlink click triggers.
+2. **Dynamic Generation & Interaction**:
+   * When WebSocket tag updates are processed, serialize the entity graph into the Mermaid DSL string with `click <NodeID> href "<URL>" "<Tooltip>" _blank` directives.
+   * Render SVG via `mermaid.render(id, dslString)` inside `#dataspace-mermaid-output`.
+   * Zoom & Pan transformations are preserved seamlessly across data reloads, while drag-distance detection prevents accidental link triggers during viewport panning.
