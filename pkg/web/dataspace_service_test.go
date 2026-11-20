@@ -37,7 +37,7 @@ func TestDataspaceService_SingleBook(t *testing.T) {
 					{Enriched: "978-3-8171-3420-1"},
 				},
 				PersonalNames: []map[string]catalog.Name{
-					{"aut": {NamePart: "Fölsing, Albrecht"}},
+					{"aut": {NamePart: "Fölsing, Albrecht", Identifier: "(DE-588)118772295"}},
 				},
 				Holdings: []catalog.Holding{
 					{
@@ -48,7 +48,7 @@ func TestDataspaceService_SingleBook(t *testing.T) {
 				},
 				Subjects: catalog.Subject{
 					Topic: []map[string]catalog.SubjectTerm{
-						{"top": {Label: "Electromagnetism"}},
+						{"top": {Label: "Electromagnetism", Identifier: "(DE-588)4002851-3"}},
 					},
 				},
 			},
@@ -58,7 +58,7 @@ func TestDataspaceService_SingleBook(t *testing.T) {
 	mockInk := func(_ context.Context, barcode string, authors []string, title string, isbns []string) ([]InkItem, error) {
 		return []InkItem{
 			{
-				Signature:       "iid-Arbeit-2428",
+				Signature:       "zotero2-2068924.UHBBY3JP",
 				Title:           "Classic Design – Future Design Classics",
 				Type:            "thesis",
 				CollectionTitle: "Archiv Institut Industrial Design",
@@ -113,6 +113,70 @@ func TestDataspaceService_SingleBook(t *testing.T) {
 	}
 	if !strings.Contains(resp.Mermaid, "Electromagnetism") {
 		t.Errorf("expected topic name in Mermaid")
+	}
+
+	// Verify deep links in Mermaid flowchart
+	if !strings.Contains(resp.Mermaid, "click Alma_1 href \"https://swisscovery.ch/discovery/search?query=any,contains,990049881560205518") {
+		t.Errorf("expected Swisscovery click deep link in Mermaid, got: %s", resp.Mermaid)
+	}
+	if !strings.Contains(resp.Mermaid, "click Auth_foelsing_albrecht_ href \"https://lobid.org/gnd/118772295\"") {
+		t.Errorf("expected GND lobid click deep link on author in Mermaid, got: %s", resp.Mermaid)
+	}
+	if !strings.Contains(resp.Mermaid, "click Ink_zotero2_2068924_ href \"https://mediathek.hgk.fhnw.ch/ink/detail/zotero2-2068924.UHBBY3JP/de\"") {
+		t.Errorf("expected InK item detail click deep link in Mermaid, got: %s", resp.Mermaid)
+	}
+	if !strings.Contains(resp.Mermaid, "click Topic_electromagnetism_ href \"https://lobid.org/gnd/4002851-3\"") {
+		t.Errorf("expected GND lobid click deep link on topic in Mermaid, got: %s", resp.Mermaid)
+	}
+	if !strings.Contains(resp.Mermaid, "click Work_1 href \"https://openalex.org/works?search=978-3-8171-3420-1\"") {
+		t.Errorf("expected OpenAlex Work click deep link in Mermaid, got: %s", resp.Mermaid)
+	}
+	if !strings.Contains(resp.Mermaid, "click Lib_fhnw_campus_mutte_ href \"https://openalex.org/institutions?search=FHNW+Campus+Muttenz\"") {
+		t.Errorf("expected OpenAlex Institution click deep link in Mermaid, got: %s", resp.Mermaid)
+	}
+	if !strings.Contains(resp.Mermaid, "click Subfield_subfield_elect_ href \"https://openalex.org/subfields\"") {
+		t.Errorf("expected OpenAlex Subfields click deep link in Mermaid, got: %s", resp.Mermaid)
+	}
+}
+
+func TestDataspaceService_URLHelpers(t *testing.T) {
+	// GND Extraction
+	if id := extractGNDID("(DE-588)118772295"); id != "118772295" {
+		t.Errorf("expected 118772295, got %s", id)
+	}
+	if id := extractGNDID("https://lobid.org/gnd/118772295"); id != "118772295" {
+		t.Errorf("expected 118772295, got %s", id)
+	}
+	if id := extractGNDID("4002851-3"); id != "4002851-3" {
+		t.Errorf("expected 4002851-3, got %s", id)
+	}
+
+	// OpenAlex Types
+	if url := buildOpenAlexTypeURL("article"); url != "https://openalex.org/types/article" {
+		t.Errorf("expected https://openalex.org/types/article, got %s", url)
+	}
+	// OpenAlex InstitutionTypes
+	if url := buildOpenAlexInstitutionTypeURL("education"); url != "https://openalex.org/institution-types/education" {
+		t.Errorf("expected https://openalex.org/institution-types/education, got %s", url)
+	}
+	// OpenAlex SourceTypes
+	if url := buildOpenAlexSourceTypeURL("repository"); url != "https://openalex.org/source-types/repository" {
+		t.Errorf("expected https://openalex.org/source-types/repository, got %s", url)
+	}
+	// OpenAlex Indexes
+	if url := buildOpenAlexIndexURL("crossref"); url != "https://openalex.org/indexes/crossref" {
+		t.Errorf("expected https://openalex.org/indexes/crossref, got %s", url)
+	}
+	// OpenAlex SourceLists
+	if url := buildOpenAlexSourceListURL("cwts-core"); url != "https://openalex.org/source-lists/cwts-core" {
+		t.Errorf("expected https://openalex.org/source-lists/cwts-core, got %s", url)
+	}
+	// OpenAlex Publishers
+	if url := buildOpenAlexPublisherURL("P4310320990", ""); url != "https://openalex.org/publishers/P4310320990" {
+		t.Errorf("expected https://openalex.org/publishers/P4310320990, got %s", url)
+	}
+	if url := buildOpenAlexPublisherURL("", "Springer Nature"); url != "https://openalex.org/publishers?search=Springer+Nature" {
+		t.Errorf("expected https://openalex.org/publishers?search=Springer+Nature, got %s", url)
 	}
 }
 
