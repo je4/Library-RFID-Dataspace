@@ -115,6 +115,16 @@
     }
 }
 
+// Light-mode subgraph/cluster box styling for Mermaid graphs
+html:not([data-theme-mode="dark"]):not([data-theme="dark"]):not([data-theme="black"]):not([data-theme="night"]):not([data-theme="dim"]) {
+    #dataspace-mermaid-output svg .cluster rect,
+    #dataspace-mermaid-output svg .cluster polygon,
+    #dataspace-mermaid-output svg .cluster path {
+        fill: #CBD3E0 !important;
+        stroke: #A0AEC0 !important;
+    }
+}
+
 .dataspace-graph-legend {
     background-color: var(--color-base-100, #ffffff);
     color: var(--color-base-content, #1f2937);

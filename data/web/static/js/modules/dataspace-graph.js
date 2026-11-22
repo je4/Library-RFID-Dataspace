@@ -37,6 +37,10 @@ function initMermaidConfig() {
     window.mermaid.initialize({
         startOnLoad: false,
         theme: dark ? 'dark' : 'default',
+        themeVariables: dark ? {} : {
+            clusterBkg: '#CBD3E0',
+            clusterBorder: '#A0AEC0'
+        },
         securityLevel: 'loose',
         flowchart: {
             useMaxWidth: false,
